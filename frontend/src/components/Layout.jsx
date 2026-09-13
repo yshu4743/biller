@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FilePlus2, Receipt, Package, Users, Wallet, ShoppingCart,
-  ArrowLeftRight, BarChart3, UserCog, Building2, LogOut, Settings, Store,
+  ArrowLeftRight, BarChart3, UserCog, UserPlus, Building2, LogOut, Settings, Store,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -17,7 +17,10 @@ const menu = (isAdmin) => [
   { to: '/payments', label: 'Payments & Dues', icon: ArrowLeftRight },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/company', label: 'Company', icon: Building2 },
-  ...(isAdmin ? [{ to: '/users', label: 'Staff Users', icon: UserCog }] : []),
+  ...(isAdmin ? [
+    { to: '/users', label: 'Staff Users', icon: UserCog },
+    { to: '/register', label: 'Register User', icon: UserPlus },
+  ] : []),
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

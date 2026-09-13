@@ -15,6 +15,7 @@ import Purchases from './pages/Purchases.jsx';
 import Payments from './pages/Payments.jsx';
 import Reports from './pages/Reports.jsx';
 import Users from './pages/Users.jsx';
+import Register from './pages/Register.jsx';
 import Settings from './pages/Settings.jsx';
 
 const ProtectedRoute = ({ children }) => {
@@ -55,6 +56,7 @@ function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/company" element={<Company />} />
             <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
+            <Route path="/register" element={<AdminRoute><Register /></AdminRoute>} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
