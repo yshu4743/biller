@@ -21,4 +21,4 @@ services:
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
-        sync: false
+        value: 9b57e9e444f3d005d0ca5bb240c509057ba23dcd037bb4b34a04fd5d3df3eeef
