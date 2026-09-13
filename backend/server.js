@@ -2,6 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import connectDB from './config/db.js';
 import User from './models/User.js';
@@ -37,6 +42,15 @@ app.use('/api/purchases', purchaseRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
+
+const distPath = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get(/^\/(?!api\/).*/, (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+  console.log('Serving frontend from', distPath);
+}
 
 const seedAdmin = async () => {
   const count = await User.countDocuments();

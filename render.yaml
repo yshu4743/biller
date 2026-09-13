@@ -1,16 +1,17 @@
 version: "1"
 
 services:
-  # ---------------- Backend API (Web Service) ----------------
+  # ---------------- Single Web Service (API + Frontend) ----------------
   - type: web
-    name: biller-backend
+    name: biller-np48
     runtime: node
     plan: free
-    rootDir: backend
     region: oregon
     healthCheckPath: /
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: |
+      cd backend && npm install
+      cd ../frontend && npm install && npm run build
+    startCommand: node backend/server.js
     autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
@@ -20,25 +21,4 @@ services:
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
-        generateValue: true
-
-  # ---------------- Frontend (Static Site) ----------------
-  - type: web
-    name: biller-frontend
-    runtime: static
-    plan: free
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    autoDeployTrigger: commit
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: no-cache
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        value: https://biller-backend.onrender.com/api
+        sync: false

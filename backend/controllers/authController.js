@@ -2,7 +2,9 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 
-const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE });
+const JWT_EXPIRE = String(process.env.JWT_EXPIRE || '7d').replace(/["']/g, '').trim() || '7d';
+
+const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: JWT_EXPIRE });
 
 export const login = async (req, res) => {
   try {
