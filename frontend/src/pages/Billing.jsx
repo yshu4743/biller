@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Package, Users, Plus, Trash2, Printer, ArrowRight, AlertTriangle } from 'lucide-react';
 import api from '../api/axios.js';
@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { Card, Button, Select, Input, SearchInput } from '../components/ui.jsx';
 import { formatCurrency, amountToWords } from '../utils/format.js';
 
-const paymentModes = ['cash', 'upi', 'card', 'credit'];
+const paymentModes = ['cash', 'upi', 'card'];
 
 const SetupWarnings = ({ company, items, parties }) => {
   const navigate = useNavigate();
@@ -81,10 +81,17 @@ const Billing = () => {
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState([]);
-  const [billing, setBilling] = useState({ discountType: 'amount', discountValue: 0, paymentMode: 'cash', paidAmount: '', notes: '', salesPerson: '' });
+  const [billing, setBilling] = useState({ discountType: 'amount', discountValue: 0, paymentMode: 'cash', paidAmount: '', notes: '', salesPerson: '', transport: { transporter: '', vehicleNo: '', lrNo: '', lrDate: '', mode: 'road' } });
   const [saving, setSaving] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchPartyIds, setBatchPartyIds] = useState([]);
 
   const company = companies.find((c) => c._id === companyId) || null;
+  const cols = company?.invoiceColumns || ['hsn'];
+  const showHsn = cols.includes('hsn');
+  const showMrp = cols.includes('mrp');
+  const showSku = cols.includes('sku');
+  const showBarcode = cols.includes('barcode');
   const party = parties.find((p) => p._id === partyId) || null;
   const isGst = company?.isGstRegistered && company.gstin;
   const interstate = isGst && party?.gstin && company?.stateCode && party?.stateCode && company.stateCode !== party.stateCode;
@@ -107,6 +114,19 @@ const Billing = () => {
   }, [user]);
 
   const setBillField = (key, value) => setBilling((b) => ({ ...b, [key]: value }));
+  const setTransportField = (key, value) => setBilling((b) => ({ ...b, transport: { ...b.transport, [key]: value } }));
+
+  const isCredit = billing.paymentMode === 'credit';
+
+  const toggleCredit = (credit) => {
+    if (credit) {
+      setBilling((b) => ({ ...b, prevMode: b.paymentMode, paymentMode: 'credit' }));
+    } else {
+      setBillField('paymentMode', billing.prevMode || 'cash');
+    }
+  };
+
+  const searchRef = useRef(null);
 
   const addToCart = (item) => {
     const existing = cart.find((c) => c.itemId === item._id);
@@ -116,7 +136,10 @@ const Billing = () => {
       setCart([...cart, {
         itemId: item._id,
         name: item.name,
+        keyword: item.keyword,
         hsn: item.hsn,
+        sku: item.sku,
+        barcode: item.barcode,
         unit: item.unit || 'pcs',
         price: Number(item.salePrice) || 0,
         mrp: item.mrp,
@@ -125,11 +148,26 @@ const Billing = () => {
         quantity: 1,
       }]);
     }
+    if (searchRef.current) {
+      searchRef.current.select();
+      searchRef.current.focus();
+    }
+  };
+
+  const handleSearchKey = (e) => {
+    if (e.key === 'Enter' && searchResults.length > 0) {
+      e.preventDefault();
+      addToCart(searchResults[0]);
+    }
   };
 
   const setQty = (itemId, value) => {
     const quantity = Math.max(0, parseInt(value, 10) || 0);
     setCart(cart.map((c) => (c.itemId === itemId ? { ...c, quantity } : c)));
+  };
+
+  const bumpQty = (itemId, delta) => {
+    setCart(cart.map((c) => (c.itemId === itemId ? { ...c, quantity: Math.max(0, (c.quantity || 0) + delta) } : c)));
   };
 
   const removeFromCart = (itemId) => setCart(cart.filter((c) => c.itemId !== itemId));
@@ -203,6 +241,7 @@ const Billing = () => {
       paidAmount: Number(billing.paidAmount) > 0 ? Number(billing.paidAmount) : undefined,
       notes: billing.notes,
       salesPerson: billing.salesPerson,
+      transport: billing.transport,
     };
 
     setSaving(true);
@@ -213,6 +252,46 @@ const Billing = () => {
     } catch (err) {
       setSaving(false);
       alert(err.response?.data?.message || 'Failed to save bill');
+    }
+  };
+
+  const handleBatchSave = async () => {
+    if (!company) return alert('Please set up your company first');
+    if (batchPartyIds.length === 0) return alert('Select at least one party for batch billing');
+    if (cart.length === 0) return alert('Add at least one item to the bill');
+    if (cart.some((c) => c.quantity <= 0)) return alert('Item quantity must be at least 1');
+
+    const payload = {
+      company: company._id,
+      partyIds: batchPartyIds,
+      items: cart.map((c) => ({
+        itemId: c.itemId,
+        name: c.name,
+        hsn: c.hsn,
+        unit: c.unit,
+        quantity: c.quantity,
+        price: c.price,
+        mrp: c.mrp,
+        gstRate: c.gstRate,
+        gstIncluded: c.gstIncluded,
+      })),
+      discountType: billing.discountType,
+      discountValue: Number(billing.discountValue) || 0,
+      paymentMode: billing.paymentMode,
+      paidAmount: Number(billing.paidAmount) > 0 ? Number(billing.paidAmount) : undefined,
+      notes: billing.notes,
+      salesPerson: billing.salesPerson,
+      transport: billing.transport,
+    };
+
+    setSaving(true);
+    try {
+      const res = await api.post('/invoices/batch', payload);
+      setSaving(false);
+      navigate(`/invoices/print-bulk?ids=${res.data.map((i) => i._id).join(',')}`);
+    } catch (err) {
+      setSaving(false);
+      alert(err.response?.data?.message || 'Failed to create batch bills');
     }
   };
 
@@ -242,9 +321,11 @@ const Billing = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Party *</label>
                   <div className="flex gap-2">
                     <select
-                      value={partyId}
+                      defaultValue=""
+                      value={batchMode ? '' : partyId}
+                      disabled={batchMode}
                       onChange={(e) => setPartyId(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-100 disabled:text-gray-400"
                     >
                       <option value="">Walk-in Customer</option>
                       {parties.map((p) => (
@@ -255,11 +336,46 @@ const Billing = () => {
                       <Plus size={16} />
                     </Button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setBatchMode((b) => !b)}
+                    className={`mt-2 text-xs font-medium underline ${batchMode ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-600'}`}
+                  >
+                    {batchMode ? 'Cancel batch mode' : 'Batch mode — one bill per party'}
+                  </button>
+                  {batchMode && (
+                    <div className="mt-2 border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-1">
+                      {parties.length === 0 && <p className="text-xs text-gray-400">No parties yet. Add parties to batch bill.</p>}
+                      {parties.map((p) => (
+                        <label key={p._id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={batchPartyIds.includes(p._id)}
+                            onChange={(e) =>
+                              setBatchPartyIds((ids) => (e.target.checked ? [...ids, p._id] : ids.filter((x) => x !== p._id)))
+                            }
+                            className="h-4 w-4"
+                          />
+                          {p.name}{p.gstin ? ' (GST)' : ''}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-3">
-                <SearchInput value={search} onChange={setSearch} placeholder="Search item by name / barcode..." />
+                <SearchInput
+                  ref={searchRef}
+                  autoFocus
+                  value={search}
+                  onChange={setSearch}
+                  onKeyDown={handleSearchKey}
+                  placeholder="Quick Entry: type / scan item, press Enter to add..."
+                />
+                {search && searchResults.length > 0 && (
+                  <p className="text-xs text-gray-400 -mt-1">Press <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded">Enter</kbd> to add "{searchResults[0].name}" instantly</p>
+                )}
                 {searchResults.length > 0 && (
                   <div className="space-y-2">
                     {searchResults.map((it) => {
@@ -298,6 +414,10 @@ const Billing = () => {
                   <thead>
                     <tr className="text-left text-gray-500 border-b border-gray-200 bg-gray-50">
                       <th className="py-3 px-4 font-medium">Item</th>
+                      {showHsn && <th className="py-3 px-4 font-medium">HSN</th>}
+                      {showSku && <th className="py-3 px-4 font-medium">SKU</th>}
+                      {showBarcode && <th className="py-3 px-4 font-medium">Barcode</th>}
+                      {showMrp && <th className="py-3 px-4 font-medium text-right">MRP</th>}
                       <th className="py-3 px-4 font-medium text-right">Price</th>
                       <th className="py-3 px-4 font-medium text-center">Qty</th>
                       <th className="py-3 px-4 font-medium text-right">Amount</th>
@@ -311,15 +431,35 @@ const Billing = () => {
                           <p className="font-medium text-gray-800">{c.name}</p>
                           {c.gstRate > 0 && <p className="text-xs text-gray-400">{c.gstRate}% GST</p>}
                         </td>
+                        {showHsn && <td className="py-3 px-4 text-gray-500">{c.hsn || '-'}</td>}
+                        {showSku && <td className="py-3 px-4 text-gray-500">{c.sku || '-'}</td>}
+                        {showBarcode && <td className="py-3 px-4 text-gray-500">{c.barcode || '-'}</td>}
+                        {showMrp && <td className="py-3 px-4 text-right text-gray-500">{c.mrp ? '₹ ' + formatCurrency(c.mrp) : '-'}</td>}
                         <td className="py-3 px-4 text-right text-gray-600">₹ {formatCurrency(c.price)}</td>
                         <td className="py-3 px-4">
-                          <input
-                            type="number"
-                            min="0"
-                            value={c.quantity}
-                            onChange={(e) => setQty(c.itemId, e.target.value)}
-                            className="w-20 mx-auto block text-center px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => bumpQty(c.itemId, -1)}
+                              className="h-7 w-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              value={c.quantity}
+                              onChange={(e) => setQty(c.itemId, e.target.value)}
+                              className="w-14 text-center px-1 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => bumpQty(c.itemId, 1)}
+                              className="h-7 w-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100"
+                            >
+                              +
+                            </button>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-gray-800">₹ {formatCurrency(c.quantity * c.price)}</td>
                         <td className="py-3 px-4 text-right">
@@ -366,22 +506,66 @@ const Billing = () => {
             </div>
 
             <div className="space-y-3">
-              <Select label="Payment Mode" value={billing.paymentMode} onChange={(e) => setBillField('paymentMode', e.target.value)}>
-                {paymentModes.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}
-              </Select>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleCredit(false)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border ${!isCredit ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    Pay Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleCredit(true)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border ${isCredit ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    Credit Sale
+                  </button>
+                </div>
+                {!isCredit && (
+                  <Select label="Payment Mode" value={billing.paymentMode} onChange={(e) => setBillField('paymentMode', e.target.value)}>
+                    {paymentModes.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+                  </Select>
+                )}
+              </div>
               <Input
                 type="number"
-                label="Amount Received"
+                label={isCredit ? 'Amount Received (advance)' : 'Amount Received'}
                 value={billing.paidAmount}
                 onChange={(e) => setBillField('paidAmount', e.target.value)}
-                placeholder={billing.paymentMode === 'credit' ? 'Amount paid (leave blank if none)' : 'Full amount'}
+                placeholder={isCredit ? 'Amount paid (leave blank if none)' : 'Full amount'}
               />
+              <details className="border border-gray-200 rounded-lg p-3">
+                <summary className="text-sm font-medium text-gray-700 cursor-pointer select-none">
+                  Transportation Details
+                </summary>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <Input label="Transporter" value={billing.transport.transporter} onChange={(e) => setTransportField('transporter', e.target.value)} />
+                  <Select label="Mode" value={billing.transport.mode} onChange={(e) => setTransportField('mode', e.target.value)}>
+                    <option value="road">Road</option>
+                    <option value="rail">Rail</option>
+                    <option value="air">Air</option>
+                    <option value="ship">Ship</option>
+                  </Select>
+                  <Input label="Vehicle No." value={billing.transport.vehicleNo} onChange={(e) => setTransportField('vehicleNo', e.target.value)} placeholder="e.g. MH-12-AB-1234" />
+                  <Input label="LR No." value={billing.transport.lrNo} onChange={(e) => setTransportField('lrNo', e.target.value)} />
+                  <Input type="date" label="LR Date" value={billing.transport.lrDate} onChange={(e) => setTransportField('lrDate', e.target.value)} />
+                  <Input label="E-Way Bill No." value={billing.transport.ewayBillNo} onChange={(e) => setTransportField('ewayBillNo', e.target.value)} />
+                </div>
+              </details>
               <Input label="Sales Person" value={billing.salesPerson} onChange={(e) => setBillField('salesPerson', e.target.value)} />
               <Input label="Notes" value={billing.notes} onChange={(e) => setBillField('notes', e.target.value)} placeholder="Optional" />
             </div>
 
-            <Button onClick={handleSave} disabled={saving || cart.length === 0} className="w-full flex items-center justify-center">
-              <Printer size={16} className="mr-2" /> {saving ? 'Saving...' : 'Save Bill & Print'}
+            <Button
+              onClick={batchMode ? handleBatchSave : handleSave}
+              disabled={saving || cart.length === 0 || (batchMode && batchPartyIds.length === 0)}
+              className="w-full flex items-center justify-center"
+            >
+              <Printer size={16} className="mr-2" />
+              {saving ? 'Saving...' : batchMode ? `Save ${batchPartyIds.length} Bill${batchPartyIds.length === 1 ? '' : 's'} & Print All` : 'Save Bill & Print'}
             </Button>
           </Card>
         </div>

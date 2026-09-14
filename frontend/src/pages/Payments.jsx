@@ -52,7 +52,16 @@ const Payments = () => {
   };
 
   const dueInvoices = form.invoice === '' && form.party ? invoices.filter((i) => i.party?._id === form.party || i.party === form.party) : invoices.filter((i) => (i.party?._id === form.party || i.party === form.party) && i._id === form.invoice);
-  const partyDue = (form.party && invoices.filter((i) => (i.party?._id === form.party || i.party === form.party)).reduce((s, i) => s + (i.dueAmount || 0), 0)) || 0;
+  const partyDue = (() => {
+    if (!form.party) return 0;
+    const party = parties.find((p) => p._id === form.party);
+    let due = party ? party.openingBalance * (party.balanceType === 'debit' ? 1 : -1) : 0;
+    invoices.filter((i) => i.party?._id === form.party || i.party === form.party).forEach((i) => {
+      due += i.invoiceType !== 'sale_return' ? (i.dueAmount || 0) : -(i.total || 0);
+    });
+    const received = payments.filter((p) => p.type === 'received' && !p.invoice && (p.party?._id === form.party || p.party === form.party)).reduce((s, p) => s + p.amount, 0);
+    return due - received;
+  })();
 
   if (loading) return <Spinner />;
 
@@ -160,6 +169,14 @@ const Payments = () => {
               <span className="text-gray-600">Party due:</span>
               <b className={partyDue > 0 ? 'text-red-600' : 'text-emerald-600'}>₹ {formatCurrency(partyDue)}</b>
             </div>
+          )}
+          {type === 'received' && (
+            <Select label="Bill (Invoice)" value={form.invoice} onChange={(e) => set('invoice', e.target.value)}>
+              <option value="">— General payment (no specific bill) —</option>
+              {dueInvoices.map((i) => (
+                <option key={i._id} value={i._id}>{i.billNumber} (Due ₹ {formatCurrency(i.dueAmount || 0)})</option>
+              ))}
+            </Select>
           )}
           <div className="grid grid-cols-2 gap-3">
             <Input type="date" label="Date" value={form.date} onChange={(e) => set('date', e.target.value)} />

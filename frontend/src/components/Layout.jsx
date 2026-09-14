@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FilePlus2, Receipt, Package, Users, Wallet, ShoppingCart,
-  ArrowLeftRight, BarChart3, UserCog, UserPlus, Building2, LogOut, Settings, Store,
+  ArrowLeftRight, BarChart3, UserCog, UserPlus, Building2, LogOut, Settings, Store, Warehouse, FileCheck2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -11,11 +11,13 @@ const menu = (isAdmin) => [
   { to: '/billing', label: 'New Bill', icon: FilePlus2 },
   { to: '/invoices', label: 'Invoices', icon: Receipt },
   { to: '/items', label: 'Items & Stock', icon: Package, adminOnly: false },
+  { to: '/godowns', label: 'Godowns', icon: Warehouse, adminOnly: false },
   { to: '/parties', label: 'Parties', icon: Users, adminOnly: false },
   { to: '/expenses', label: 'Expenses', icon: Wallet, adminOnly: false },
   { to: '/purchases', label: 'Purchases', icon: ShoppingCart },
   { to: '/payments', label: 'Payments & Dues', icon: ArrowLeftRight },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
+  { to: '/gst', label: 'GST Returns', icon: FileCheck2, adminOnly: false },
   { to: '/company', label: 'Company', icon: Building2 },
   ...(isAdmin ? [
     { to: '/users', label: 'Staff Users', icon: UserCog },

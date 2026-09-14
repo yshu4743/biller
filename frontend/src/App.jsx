@@ -10,10 +10,14 @@ import Parties from './pages/Parties.jsx';
 import Billing from './pages/Billing.jsx';
 import Invoices from './pages/Invoices.jsx';
 import InvoicePrint from './pages/InvoicePrint.jsx';
+import BulkPrint from './pages/BulkPrint.jsx';
+import BarcodeLabels from './pages/BarcodeLabels.jsx';
 import Expenses from './pages/Expenses.jsx';
 import Purchases from './pages/Purchases.jsx';
 import Payments from './pages/Payments.jsx';
 import Reports from './pages/Reports.jsx';
+import Gst from './pages/Gst.jsx';
+import Godowns from './pages/Godowns.jsx';
 import Users from './pages/Users.jsx';
 import Register from './pages/Register.jsx';
 import Settings from './pages/Settings.jsx';
@@ -48,12 +52,16 @@ function App() {
             <Route path="/billing" element={<Billing />} />
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/invoices/:id/print" element={<InvoicePrint />} />
+            <Route path="/invoices/print-bulk" element={<BulkPrint />} />
+            <Route path="/barcodes" element={<BarcodeLabels />} />
             <Route path="/items" element={<Items />} />
             <Route path="/parties" element={<Parties />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/purchases" element={<Purchases />} />
             <Route path="/payments" element={<Payments />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/gst" element={<Gst />} />
+            <Route path="/godowns" element={<Godowns />} />
             <Route path="/company" element={<Company />} />
             <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
             <Route path="/register" element={<AdminRoute><Register /></AdminRoute>} />

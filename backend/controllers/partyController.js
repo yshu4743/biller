@@ -1,4 +1,13 @@
 import Party from '../models/Party.js';
+import { validateGstin } from '../utils/gstin.js';
+
+function gstinError(body) {
+  const gstin = String(body.gstin || '').trim();
+  if (!gstin) return null;
+  const result = validateGstin(gstin);
+  if (!result.valid) return { message: `Invalid GSTIN: ${result.errors.join('; ')}` };
+  return null;
+}
 
 export const listParties = async (req, res) => {
   try {
@@ -25,6 +34,8 @@ export const createParty = async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: 'Party name is required' });
+    const gstErr = gstinError(req.body);
+    if (gstErr) return res.status(400).json(gstErr);
     const party = await Party.create({ ...req.body, createdBy: req.user._id });
     res.status(201).json(party);
   } catch (error) {
@@ -36,6 +47,8 @@ export const updateParty = async (req, res) => {
   try {
     const party = await Party.findById(req.params.id);
     if (!party) return res.status(404).json({ message: 'Party not found' });
+    const gstErr = gstinError(req.body);
+    if (gstErr) return res.status(400).json(gstErr);
     Object.assign(party, req.body);
     await party.save();
     res.json(party);

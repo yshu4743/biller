@@ -1,19 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Printer } from 'lucide-react';
 import api from '../api/axios.js';
 import InvoiceTemplate from '../components/InvoiceTemplate.jsx';
 import { Spinner, Button } from '../components/ui.jsx';
 
-const InvoicePrint = () => {
-  const { id } = useParams();
+const BulkPrint = () => {
+  const [params] = useSearchParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
 
+  const ids = (params.get('ids') || '').split(',').filter(Boolean);
+
   useEffect(() => {
-    api.get(`/invoices/print/${id}`).then((res) => setData(res.data)).catch((err) => setError(err.response?.data?.message || 'Invoice not found'));
-  }, [id]);
+    if (ids.length === 0) {
+      setError('No invoices selected');
+      return;
+    }
+    api.post('/invoices/bulk-print', { ids }).then((res) => setData(res.data)).catch((err) => setError(err.response?.data?.message || 'Failed to load invoices'));
+  }, [params]);
 
   if (error) return (
     <div className="text-center py-16">
@@ -23,26 +29,26 @@ const InvoicePrint = () => {
   );
   if (!data) return <Spinner />;
 
-  const { invoice, company } = data;
-
   return (
     <div>
       <div className="no-print flex items-center justify-between mb-4">
         <Button variant="secondary" onClick={() => navigate(-1)}>
           <ArrowLeft size={16} className="mr-1" /> Back
         </Button>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => navigate('/billing')}>New Bill</Button>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-600">{data.length} invoice(s) ready</span>
           <Button onClick={() => window.print()} className="flex items-center">
-            <Printer size={16} className="mr-1" /> Print Bill
+            <Printer size={16} className="mr-1" /> Print All
           </Button>
         </div>
       </div>
-      <div id="print-area" className="max-w-[800px] mx-auto shadow-lg">
-        <InvoiceTemplate invoice={invoice} company={company} />
+      <div id="print-area" className="max-w-[800px] mx-auto space-y-6">
+        {data.map(({ invoice, company }, idx) => (
+          <InvoiceTemplate key={invoice._id} invoice={invoice} company={company} index={idx} />
+        ))}
       </div>
     </div>
   );
 };
 
-export default InvoicePrint;
+export default BulkPrint;

@@ -20,6 +20,8 @@ const itemSchema = new mongoose.Schema(
     lowStockAlert: { type: Number, default: 0 },
     batch: { type: String, default: '' },
     expiryDate: { type: Date, default: null },
+    godowns: [{ godown: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown' }, qty: { type: Number, default: 0 } }],
+    defaultGodown: { type: mongoose.Schema.Types.ObjectId, ref: 'Godown', default: null },
     isService: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

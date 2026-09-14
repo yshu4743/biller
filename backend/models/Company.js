@@ -5,6 +5,7 @@ const companySchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     gstin: { type: String, default: '' },
     isGstRegistered: { type: Boolean, default: false },
+    gstBusinessType: { type: String, enum: ['regular', 'composition', 'sez', 'unregistered'], default: 'regular' },
     phone: { type: String, default: '' },
     email: { type: String, default: '' },
     address: { type: String, default: '' },
@@ -21,6 +22,15 @@ const companySchema = new mongoose.Schema(
     invoicePrefix: { type: String, default: 'INV' },
     invoiceNote: { type: String, default: 'Thank you for your business!' },
     invoiceFooter: { type: String, default: '' },
+    transactionLabels: {
+      sale: { type: String, default: 'TAX INVOICE' },
+      estimate: { type: String, default: 'QUOTATION' },
+      challan: { type: String, default: 'DELIVERY CHALLAN' },
+      sale_return: { type: String, default: 'CREDIT NOTE' },
+    },
+    invoiceColumns: { type: [String], default: ['hsn'] },
+    preventNegativeStock: { type: Boolean, default: false },
+    fyOffset: { type: Number, default: 0 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

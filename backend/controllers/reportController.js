@@ -182,6 +182,56 @@ export const partyStatement = async (req, res) => {
   }
 };
 
+export const gstr1Summary = async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const invoices = await Invoice.find({ invoiceType: 'sale', ...dateRange(from, to) });
+    const buckets = { b2b: { count: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, value: 0 }, b2cSmall: { count: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, value: 0 }, b2cLarge: { count: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, value: 0 }, exports: { count: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, value: 0 } };
+    let einvoiceCount = 0;
+    let ewayBillGenerated = 0;
+    let ewayBillRequired = 0;
+
+    const addTo = (b, inv) => {
+      b.count += 1;
+      b.taxable += inv.taxable || 0;
+      b.cgst += inv.cgst || 0;
+      b.sgst += inv.sgst || 0;
+      b.igst += inv.igst || 0;
+      b.value += inv.total || 0;
+    };
+
+    invoices.forEach((inv) => {
+      const partyGst = inv.partySnapshot?.gstin;
+      const dest = inv.partySnapshot?.stateCode || '';
+      if (/^9[6-9]$/.test(dest)) addTo(buckets.exports, inv);
+      else if (partyGst) addTo(buckets.b2b, inv);
+      else if (inv.total >= 250000) addTo(buckets.b2cLarge, inv);
+      else addTo(buckets.b2cSmall, inv);
+      if (inv.eInvoice?.irn) einvoiceCount += 1;
+      if (inv.eWayBill?.no) ewayBillGenerated += 1;
+      if (inv.eWayBill?.thresholdMet || inv.total > 50000) ewayBillRequired += 1;
+    });
+
+    const total = {
+      count: invoices.length,
+      taxable: invoices.reduce((s, i) => s + (i.taxable || 0), 0),
+      cgst: invoices.reduce((s, i) => s + (i.cgst || 0), 0),
+      sgst: invoices.reduce((s, i) => s + (i.sgst || 0), 0),
+      igst: invoices.reduce((s, i) => s + (i.igst || 0), 0),
+    };
+    total.totalTax = total.cgst + total.sgst + total.igst;
+
+    res.json({
+      period: { from: from || null, to: to || null },
+      buckets,
+      total,
+      compliance: { einvoiceCount, ewayBillGenerated, ewayBillRequired },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 export const dayBook = async (req, res) => {
   try {
     const { date } = req.query;

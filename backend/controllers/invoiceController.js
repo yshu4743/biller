@@ -27,8 +27,8 @@ function toWords(num) {
   return result;
 }
 
-async function generateBillNumber(companyId, prefix) {
-  const fy = new Date().getFullYear();
+async function generateBillNumber(companyId, prefix, fyOffset = 0) {
+  const fy = new Date().getFullYear() + fyOffset;
   const fyStr = fy.toString().slice(-2) + (fy + 1).toString().slice(-2);
   const fullPrefix = `${prefix}-${fyStr}`;
   const counter = await BillCounter.findOneAndUpdate(
@@ -43,120 +43,178 @@ function getHSNMain(code) {
   return code ? code.toString().substring(0, 4) : '';
 }
 
+async function buildInvoice(userId, body) {
+  const { company: companyId, partyId, items, discountType, discountValue, paymentMode, paidAmount, notes, salesPerson, invoiceType, dueDate, transport } = body;
+  if (!items || items.length === 0) throw new Error('No items in invoice');
+
+  const company = await Company.findById(companyId);
+  const party = partyId ? await Party.findById(partyId) : null;
+
+  const isCompanyGst = company && company.isGstRegistered && company.gstin;
+  const isPartyGst = party && party.gstin;
+  const isSameState = !party || !party.stateCode || !company?.stateCode || party.stateCode === company.stateCode;
+
+  let subtotal = 0;
+  let totalCgst = 0;
+  let totalSgst = 0;
+  let totalIgst = 0;
+  let totalDiscount = 0;
+
+  const invoiceItems = [];
+  for (const entry of items) {
+    const itemDoc = await Item.findById(entry.itemId);
+    const qty = Number(entry.quantity) || 1;
+    const price = Number(entry.price) || (itemDoc ? itemDoc.salePrice : 0);
+    const gstRate = Number(entry.gstRate !== undefined ? entry.gstRate : (itemDoc ? itemDoc.gstRate : 0));
+    const gstIncluded = entry.gstIncluded !== undefined ? entry.gstIncluded : (itemDoc ? itemDoc.gstIncluded : false);
+    const itemDiscount = Number(entry.discount) || 0;
+    const amount = qty * price;
+    const discountedAmount = amount - itemDiscount;
+    const taxableAmount = gstIncluded && gstRate > 0 ? discountedAmount / (1 + gstRate / 100) : discountedAmount;
+    const gstAmount = (taxableAmount * gstRate) / 100;
+
+    if (isSameState) {
+      totalCgst += gstAmount / 2;
+      totalSgst += gstAmount / 2;
+    } else {
+      totalIgst += gstAmount;
+    }
+    totalDiscount += itemDiscount;
+    subtotal += amount;
+
+    if (invoiceType === 'sale' && company && company.preventNegativeStock && itemDoc && !itemDoc.isService && itemDoc.stock < qty) {
+      throw new Error(`Insufficient stock for "${itemDoc.name}": available ${itemDoc.stock} ${itemDoc.unit}, need ${qty}`);
+    }
+
+    invoiceItems.push({
+      item: itemDoc ? itemDoc._id : null,
+      name: entry.name || (itemDoc ? itemDoc.name : ''),
+      hsn: entry.hsn || (itemDoc ? itemDoc.hsn : ''),
+      unit: entry.unit || (itemDoc ? itemDoc.unit : 'pcs'),
+      quantity: qty,
+      price,
+      mrp: entry.mrp || (itemDoc ? itemDoc.mrp : 0),
+      gstRate,
+      gstIncluded,
+      amount,
+      discount: itemDiscount,
+      discountedAmount,
+    });
+  }
+
+  let billDiscount = 0;
+  if (discountValue > 0) {
+    if (discountType === 'percent') {
+      billDiscount = subtotal * discountValue / 100;
+    } else {
+      billDiscount = discountValue;
+    }
+    totalDiscount += billDiscount;
+  }
+
+  const taxable = subtotal - totalDiscount;
+  const totalGst = totalCgst + totalSgst + totalIgst;
+  let total = taxable + totalGst;
+  const roundOff = Math.round(total) - total;
+  total = Math.round(total);
+
+  const defaultPaid = paymentMode === 'cash' || paymentMode === 'upi' || paymentMode === 'card' ? total : 0;
+  const effectivePaid = paidAmount > 0 ? Math.min(paidAmount, total) : defaultPaid;
+
+  let invoice;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const billNumber = await generateBillNumber(companyId, company ? company.invoicePrefix : 'INV', company ? company.fyOffset : 0);
+    try {
+      invoice = await Invoice.create({
+        billNumber,
+        prefix: company ? company.invoicePrefix : 'INV',
+        company: companyId,
+        party: party ? party._id : undefined,
+        partySnapshot: party ? { name: party.name, gstin: party.gstin, phone: party.phone, address: party.address, stateCode: party.stateCode } : undefined,
+        items: invoiceItems,
+        invoiceType: invoiceType || 'sale',
+        subtotal,
+        discountType: discountType || 'amount',
+        discountValue: discountValue || 0,
+        discountAmount: totalDiscount,
+        taxable,
+        cgst: Math.round(totalCgst * 100) / 100,
+        sgst: Math.round(totalSgst * 100) / 100,
+        igst: Math.round(totalIgst * 100) / 100,
+        totalGst: Math.round(totalGst * 100) / 100,
+        roundOff: Math.round(roundOff * 100) / 100,
+        total,
+        amountInWords: toWords(total),
+        status: effectivePaid >= total ? 'paid' : effectivePaid > 0 ? 'partial' : 'unpaid',
+        paidAmount: effectivePaid,
+        dueAmount: total - effectivePaid,
+        paymentMode: paymentMode || 'cash',
+        dueDate: dueDate || null,
+        notes: notes || '',
+        salesPerson: salesPerson || '',
+        transport: transport || {},
+        createdBy: userId,
+      });
+      break;
+    } catch (err) {
+      if (err.code === 11000) continue;
+      throw err;
+    }
+  }
+  if (!invoice) throw new Error('Could not allocate a unique bill number');
+
+  if (invoice.invoiceType === 'sale') {
+    for (const entry of items) {
+      const qtySold = Number(entry.quantity) || 0;
+      await Item.findByIdAndUpdate(entry.itemId, { $inc: { stock: -qtySold } });
+      const itemDoc = await Item.findById(entry.itemId);
+      if (itemDoc && itemDoc.godowns && itemDoc.godowns.length > 0) {
+        const target = itemDoc.godowns.find((g) => g.godown && String(g.godown) === String(itemDoc.defaultGodown))
+          || itemDoc.godowns.find((g) => g.qty >= qtySold)
+          || itemDoc.godowns[0];
+        if (target) {
+          target.qty -= qtySold;
+          await itemDoc.save();
+        }
+      }
+    }
+  }
+
+  return invoice;
+}
+
 export const createInvoice = async (req, res) => {
   try {
-    const { company: companyId, partyId, items, discountType, discountValue, paymentMode, paidAmount, notes, salesPerson, invoiceType, dueDate } = req.body;
-    if (!items || items.length === 0) return res.status(400).json({ message: 'No items in invoice' });
-
-    const company = await Company.findById(companyId);
-    const party = partyId ? await Party.findById(partyId) : null;
-
-    const isCompanyGst = company && company.isGstRegistered && company.gstin;
-    const isPartyGst = party && party.gstin;
-    const isSameState = !party || !party.stateCode || !company?.stateCode || party.stateCode === company.stateCode;
-
-    let subtotal = 0;
-    let totalCgst = 0;
-    let totalSgst = 0;
-    let totalIgst = 0;
-    let totalDiscount = 0;
-
-    const invoiceItems = [];
-    for (const entry of items) {
-      const itemDoc = await Item.findById(entry.itemId);
-      const qty = Number(entry.quantity) || 1;
-      const price = Number(entry.price) || (itemDoc ? itemDoc.salePrice : 0);
-      const gstRate = Number(entry.gstRate !== undefined ? entry.gstRate : (itemDoc ? itemDoc.gstRate : 0));
-      const gstIncluded = entry.gstIncluded !== undefined ? entry.gstIncluded : (itemDoc ? itemDoc.gstIncluded : false);
-      const itemDiscount = Number(entry.discount) || 0;
-      const amount = qty * price;
-      const discountedAmount = amount - itemDiscount;
-      const taxableAmount = gstIncluded && gstRate > 0 ? discountedAmount / (1 + gstRate / 100) : discountedAmount;
-      const gstAmount = (taxableAmount * gstRate) / 100;
-
-      if (isSameState) {
-        totalCgst += gstAmount / 2;
-        totalSgst += gstAmount / 2;
-      } else {
-        totalIgst += gstAmount;
-      }
-      totalDiscount += itemDiscount;
-      subtotal += amount;
-
-      invoiceItems.push({
-        item: itemDoc ? itemDoc._id : null,
-        name: entry.name || (itemDoc ? itemDoc.name : ''),
-        hsn: entry.hsn || (itemDoc ? itemDoc.hsn : ''),
-        unit: entry.unit || (itemDoc ? itemDoc.unit : 'pcs'),
-        quantity: qty,
-        price,
-        mrp: entry.mrp || (itemDoc ? itemDoc.mrp : 0),
-        gstRate,
-        gstIncluded,
-        amount,
-        discount: itemDiscount,
-        discountedAmount,
-      });
-    }
-
-    let billDiscount = 0;
-    if (discountValue > 0) {
-      if (discountType === 'percent') {
-        billDiscount = subtotal * discountValue / 100;
-      } else {
-        billDiscount = discountValue;
-      }
-      totalDiscount += billDiscount;
-    }
-
-    const taxable = subtotal - totalDiscount;
-    const totalGst = totalCgst + totalSgst + totalIgst;
-    let total = taxable + totalGst;
-    const roundOff = Math.round(total) - total;
-    total = Math.round(total);
-
-    const billNumber = await generateBillNumber(companyId, company ? company.invoicePrefix : 'INV');
-
-    const defaultPaid = paymentMode === 'cash' || paymentMode === 'upi' || paymentMode === 'card' ? total : 0;
-    const effectivePaid = paidAmount > 0 ? Math.min(paidAmount, total) : defaultPaid;
-
-    const invoice = await Invoice.create({
-      billNumber,
-      prefix: company ? company.invoicePrefix : 'INV',
-      company: companyId,
-      party: party ? party._id : undefined,
-      partySnapshot: party ? { name: party.name, gstin: party.gstin, phone: party.phone, address: party.address, stateCode: party.stateCode } : undefined,
-      items: invoiceItems,
-      invoiceType: invoiceType || 'sale',
-      subtotal,
-      discountType: discountType || 'amount',
-      discountValue: discountValue || 0,
-      discountAmount: totalDiscount,
-      taxable,
-      cgst: Math.round(totalCgst * 100) / 100,
-      sgst: Math.round(totalSgst * 100) / 100,
-      igst: Math.round(totalIgst * 100) / 100,
-      totalGst: Math.round(totalGst * 100) / 100,
-      roundOff: Math.round(roundOff * 100) / 100,
-      total,
-      amountInWords: toWords(total),
-      status: effectivePaid >= total ? 'paid' : effectivePaid > 0 ? 'partial' : 'unpaid',
-      paidAmount: effectivePaid,
-      dueAmount: total - effectivePaid,
-      paymentMode: paymentMode || 'cash',
-      dueDate: dueDate || null,
-      notes: notes || '',
-      salesPerson: salesPerson || '',
-      createdBy: req.user._id,
-    });
-
-    if (invoice.invoiceType === 'sale') {
-      for (const entry of items) {
-        await Item.findByIdAndUpdate(entry.itemId, { $inc: { stock: -Number(entry.quantity) || 0 } });
-      }
-    }
-
+    const invoice = await buildInvoice(req.user._id, req.body);
     res.status(201).json(invoice);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const createBatchInvoices = async (req, res) => {
+  try {
+    const { partyIds } = req.body;
+    if (!partyIds || partyIds.length === 0) return res.status(400).json({ message: 'Select at least one party' });
+    const created = [];
+    for (const partyId of partyIds) {
+      created.push(await buildInvoice(req.user._id, { ...req.body, partyId }));
+    }
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const bulkPrint = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || ids.length === 0) return res.status(400).json({ message: 'No invoice ids provided' });
+    const invoices = await Invoice.find({ _id: { $in: ids } }).sort({ billNumber: 1 });
+    const companies = await Company.find({ _id: { $in: invoices.map((i) => i.company).filter(Boolean) } });
+    const companyMap = new Map(companies.map((c) => [c._id.toString(), c]));
+    const result = invoices.map((invoice) => ({ invoice, company: invoice.company ? companyMap.get(invoice.company.toString()) : null }));
+    res.json(result);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -217,6 +275,14 @@ export const deleteInvoice = async (req, res) => {
       for (const entry of invoice.items) {
         if (entry.item) {
           await Item.findByIdAndUpdate(entry.item, { $inc: { stock: entry.quantity } });
+          const itemDoc = await Item.findById(entry.item);
+          if (itemDoc && itemDoc.godowns && itemDoc.godowns.length > 0) {
+            const target = itemDoc.godowns.find((g) => g.godown && String(g.godown) === String(itemDoc.defaultGodown)) || itemDoc.godowns[0];
+            if (target) {
+              target.qty += entry.quantity;
+              await itemDoc.save();
+            }
+          }
         }
       }
     }

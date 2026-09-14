@@ -123,16 +123,18 @@ export const EmptyState = ({ message }) => (
   </div>
 );
 
-export const SearchInput = ({ value, onChange, placeholder = 'Search...', className = '' }) => (
+export const SearchInput = React.forwardRef(({ value, onChange, placeholder = 'Search...', className = '', ...props }, ref) => (
   <div className={`relative ${className}`}>
     <input
+      ref={ref}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      {...props}
     />
     <svg className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
     </svg>
   </div>
-);
+));

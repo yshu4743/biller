@@ -25,18 +25,20 @@ export const createPayment = async (req, res) => {
   try {
     const { party, type, amount, mode, date, invoice, purchase, reference, note } = req.body;
     if (!party || !type || !amount) return res.status(400).json({ message: 'Party, type and amount are required' });
-    const payment = await Payment.create({
+    const paymentData = {
       party,
       type,
       amount: Number(amount),
       mode: mode || 'cash',
       date: date || Date.now(),
-      invoice,
-      purchase,
       reference: reference || '',
       note: note || '',
       createdBy: req.user._id,
-    });
+    };
+    if (invoice) paymentData.invoice = invoice;
+    if (purchase) paymentData.purchase = purchase;
+
+    const payment = await Payment.create(paymentData);
 
     if (invoice) {
       const inv = await Invoice.findById(invoice);
@@ -97,6 +99,12 @@ export const deletePayment = async (req, res) => {
 export const partyOutstanding = async (req, res) => {
   try {
     const parties = await Party.find({ isActive: true, partyType: { $ne: 'supplier' } });
+    const received = await Payment.find({ type: 'received', invoice: null });
+    const receivedByParty = {};
+    received.forEach((p) => {
+      const key = p.party ? String(p.party) : '';
+      receivedByParty[key] = (receivedByParty[key] || 0) + p.amount;
+    });
     const result = [];
     for (const party of parties) {
       const invoices = await Invoice.find({ party: party._id });
@@ -105,6 +113,7 @@ export const partyOutstanding = async (req, res) => {
         if (inv.invoiceType !== 'sale_return') totalDue += inv.dueAmount;
         else totalDue -= inv.total;
       });
+      totalDue -= receivedByParty[String(party._id)] || 0;
       result.push({ party, due: totalDue });
     }
     const filtered = result.filter((r) => r.due > 0 || Math.abs(r.due) < 0.001 ? true : false).sort((a, b) => b.due - a.due);

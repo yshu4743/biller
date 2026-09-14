@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pencil, Trash2, PackagePlus, Layers, Plus, X } from 'lucide-react';
+import { Pencil, Trash2, PackagePlus, Layers, Plus, X, Barcode } from 'lucide-react';
 import api from '../api/axios.js';
 import { Card, Button, Input, Select, Modal, Badge, SearchInput, Spinner, EmptyState } from '../components/ui.jsx';
 import { formatCurrency, formatDate } from '../utils/format.js';
@@ -8,6 +8,7 @@ const emptyForm = {
   name: '', keyword: '', hsn: '', sku: '', barcode: '', unit: 'pcs', category: 'General',
   purchasePrice: 0, salePrice: 0, mrp: 0, wholesalePrice: 0, gstRate: 0, gstIncluded: false,
   stock: 0, lowStockAlert: 0, batch: '', expiryDate: '', isService: false,
+  defaultGodown: '', godownsQty: {},
 };
 
 const units = ['pcs', 'kg', 'g', 'l', 'ml', 'box', 'pack', 'dozen', 'bag', 'bottle', 'roll', 'meter', 'set', 'pair', 'tin', 'carton'];
@@ -29,6 +30,39 @@ const Items = () => {
   const [bulkModal, setBulkModal] = useState(false);
   const [bulkRows, setBulkRows] = useState([newBulkRow()]);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [godowns, setGodowns] = useState([]);
+
+  const parseCsv = () => {
+    const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return alert('Paste at least one line');
+    const stripped = lines.map((l) => l.replace(/^\s*[:-]\s*/, ''));
+    const rows = stripped.map((line) => {
+      const cols = line.includes('\t') ? line.split('\t') : line.split(',');
+      const c = cols.map((x) => x.trim());
+      const firstRowIsHeader = /name/i.test(c[0] || '') && /(price|mrp|stock|hsn)/i.test(cols.slice(1).join(' '));
+      const data = firstRowIsHeader ? c.slice(1) : c;
+      const [name, keyword, hsn, unit, purchasePrice, salePrice, mrp, gstRate, stock, lowStockAlert] = data;
+      return {
+        ...newBulkRow(),
+        name: name || '',
+        keyword: keyword || '',
+        hsn: hsn || '',
+        unit: (unit || 'pcs').toLowerCase(),
+        purchasePrice: parseFloat(purchasePrice) || 0,
+        salePrice: parseFloat(salePrice) || 0,
+        mrp: parseFloat(mrp) || 0,
+        gstRate: parseFloat(gstRate) || 0,
+        stock: parseFloat(stock) || 0,
+        lowStockAlert: parseFloat(lowStockAlert) || 0,
+      };
+    });
+    const header = lines[0] && /name/i.test(lines[0]) && /(price|stock|hsn|mrp|gst)/i.test(lines[0]) ? 1 : 0;
+    const final = header && rows.length === lines.length ? rows : rows.filter((r) => r.name);
+    setBulkRows(final.length ? final : [newBulkRow()]);
+    setCsvText('');
+    alert(`${final.length} item(s) loaded from CSV/Excel. Review and save.`);
+  };
 
   const load = async () => {
     const params = {};
@@ -41,19 +75,37 @@ const Items = () => {
 
   useEffect(() => { load(); }, [search, lowOnly]);
 
+useEffect(() => {
+  api.get('/godowns').then((res) => setGodowns(res.data)).catch(() => {});
+}, []);
+
   const openCreate = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
   const openEdit = (item) => {
     setEditId(item._id);
-    setForm({ ...emptyForm, ...item, expiryDate: item.expiryDate ? item.expiryDate.slice(0, 10) : '' });
+    const godownsQty = {};
+    (item.godowns || []).forEach((g) => { if (g.godown) godownsQty[g.godown] = g.qty; });
+    setForm({ ...emptyForm, ...item, defaultGodown: item.defaultGodown || '', godownsQty, expiryDate: item.expiryDate ? item.expiryDate.slice(0, 10) : '' });
     setModalOpen(true);
   };
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+  const setGodownQty = (godownId, value) => setForm((f) => ({ ...f, godownsQty: { ...f.godownsQty, [godownId]: value } }));
 
   const handleSubmit = async () => {
     if (!form.name) return alert('Item name is required');
+    const godowns = Object.entries(form.godownsQty)
+      .filter(([, q]) => Number(q) > 0)
+      .map(([godown, qty]) => ({ godown, qty: Number(qty) }));
+    const godownStock = godowns.length > 0 ? godowns.reduce((s, g) => s + g.qty, 0) : null;
+    const payload = {
+      ...form,
+      godowns,
+      defaultGodown: form.defaultGodown || undefined,
+      stock: !form.isService && godownStock !== null ? godownStock : form.stock,
+    };
+    delete payload.godownsQty;
     try {
-      if (editId) await api.put(`/items/${editId}`, form);
-      else await api.post('/items', form);
+      if (editId) await api.put(`/items/${editId}`, payload);
+      else await api.post('/items', payload);
       setModalOpen(false);
       load();
     } catch (err) {
@@ -77,6 +129,22 @@ const Items = () => {
 
   const openBulk = () => { setBulkRows([newBulkRow()]); setBulkModal(true); };
   const setBulkRow = (idx, key, value) => setBulkRows((rows) => rows.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
+
+  const handleLabels = async (itemIds) => {
+    if (items.length === 0) return;
+    const ids = itemIds || items.map((i) => i._id);
+    handleBarcodeGeneration(ids, ids.join(','));
+  };
+
+  const handleBarcodeGeneration = async (ids, nav) => {
+    try {
+      await api.post('/items/generate-barcodes', { ids });
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to generate barcodes');
+      return;
+    }
+    window.location.href = `/barcodes?ids=${nav || ids.join(',')}`;
+  };
 
   const handleBulkSubmit = async () => {
     const valid = bulkRows.filter((r) => r.name && r.name.trim());
@@ -105,6 +173,7 @@ const Items = () => {
         </div>
         <div className="flex items-center gap-3">
           <Button variant="secondary" onClick={openBulk}><Layers size={16} className="mr-1 inline" /> Bulk Add</Button>
+          <Button variant="secondary" onClick={() => handleLabels()}><Barcode size={16} className="mr-1 inline" /> Barcode Labels</Button>
           <Button onClick={openCreate}>Add Item</Button>
         </div>
       </div>
@@ -161,6 +230,9 @@ const Items = () => {
                         <button onClick={() => setStockModal({ item })} className="p-1.5 text-gray-400 hover:text-indigo-600" title="Adjust stock">
                           <PackagePlus size={16} />
                         </button>
+                        <button onClick={() => handleLabels([item._id])} className="p-1.5 text-gray-400 hover:text-indigo-600" title="Print barcode label">
+                          {item.barcode && <span className="mr-1 text-xs text-emerald-600">●</span>}<Barcode size={16} />
+                        </button>
                         <button onClick={() => openEdit(item)} className="p-1.5 text-gray-400 hover:text-indigo-600"><Pencil size={16} /></button>
                         <button onClick={() => handleDelete(item)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
                       </div>
@@ -195,6 +267,20 @@ const Items = () => {
           </label>
           <Input type="number" label="Stock" value={form.stock} onChange={(e) => set('stock', e.target.value)} />
           <Input type="number" label="Low Stock Alert" value={form.lowStockAlert} onChange={(e) => set('lowStockAlert', e.target.value)} />
+          {godowns.length > 0 && (
+            <div className="col-span-2 sm:col-span-3 border-t border-gray-100 pt-3">
+              <p className="text-sm font-medium text-gray-700 mb-2">Stock by Godown</p>
+              <div className="grid grid-cols-2 gap-3">
+                {godowns.map((g) => (
+                  <Input key={g._id} type="number" label={g.name} value={form.godownsQty[g._id] ?? ''} placeholder="0" onChange={(e) => setGodownQty(g._id, e.target.value)} />
+                ))}
+              </div>
+              <Select label="Default Godown (bills deduct this first)" value={form.defaultGodown} onChange={(e) => set('defaultGodown', e.target.value)} className="mt-3">
+                <option value="">None</option>
+                {godowns.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
+              </Select>
+            </div>
+          )}
           <Input label="Batch No." value={form.batch} onChange={(e) => set('batch', e.target.value)} />
           <Input type="date" label="Expiry Date" value={form.expiryDate} onChange={(e) => set('expiryDate', e.target.value)} />
           <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -222,6 +308,20 @@ const Items = () => {
       </Modal>
 
       <Modal open={bulkModal} onClose={() => setBulkModal(false)} title="Bulk Add Items" maxWidth="max-w-4xl">
+        <div className="border border-gray-200 rounded-lg p-3 mb-4">
+          <p className="text-sm font-medium text-gray-700 mb-2">Paste from Excel / CSV</p>
+          <p className="text-xs text-gray-500 mb-2">
+            One item per line. Columns: <code className="bg-gray-100 px-1 rounded">Name, Keyword, HSN, Unit, Purchase ₹, Sale ₹, MRP ₹, GST %, Stock, Low Alert</code>
+          </p>
+          <textarea
+            value={csvText}
+            onChange={(e) => setCsvText(e.target.value)}
+            rows={4}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder={"Steel Spoon,spoon,8215,pcs,20,35,40,18,100,10\nPlastic Mug,mug,3924,pcs,10,25,30,18,200,20"}
+          />
+          <Button variant="secondary" onClick={parseCsv} className="mt-2"><Layers size={15} className="mr-1 inline" /> Load Into List</Button>
+        </div>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-gray-500">Add multiple items at once. Fill each row and save.</p>
           <Button variant="secondary" onClick={() => setBulkRows((r) => [...r, newBulkRow()])}><Plus size={16} className="mr-1 inline" /> Add Row</Button>

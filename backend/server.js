@@ -20,6 +20,8 @@ import invoiceRoutes from './routes/invoiceRoutes.js';
 import expenseRoutes from './routes/expenseRoutes.js';
 import purchaseRoutes from './routes/purchaseRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import godownRoutes from './routes/godownRoutes.js';
+import gstRoutes from './routes/gstRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 
@@ -40,6 +42,8 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/godowns', godownRoutes);
+app.use('/api/gst', gstRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 

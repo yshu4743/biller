@@ -17,6 +17,7 @@ const Parties = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [gstCheck, setGstCheck] = useState(null);
 
   const load = async () => {
     const params = {};
@@ -28,9 +29,20 @@ const Parties = () => {
 
   useEffect(() => { load(); }, [search]);
 
-  const openCreate = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (p) => { setEditId(p._id); setForm({ ...emptyForm, ...p }); setModalOpen(true); };
+  const openCreate = () => { setForm(emptyForm); setEditId(null); setGstCheck(null); setModalOpen(true); };
+  const openEdit = (p) => { setEditId(p._id); setGstCheck(null); setForm({ ...emptyForm, ...p }); setModalOpen(true); };
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const verifyGstin = async () => {
+    setGstCheck(null);
+    if (!form.gstin) return alert('Enter a GSTIN first');
+    try {
+      const res = await api.post('/gst/verify', { gstin: form.gstin });
+      setGstCheck(res.data);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Verification failed');
+    }
+  };
 
   const onStateChange = (name) => {
     const state = getIndiaStates().find((s) => s.name === name);
@@ -118,7 +130,18 @@ const Parties = () => {
             <option value="distributor">Distributor</option>
             <option value="other">Other</option>
           </Select>
-          <Input label="GSTIN" value={form.gstin} onChange={(e) => set('gstin', e.target.value)} placeholder="07ABCDE1234F1Z5" />
+          <div className="col-span-2 sm:col-span-3 flex items-end gap-2">
+            <div className="flex-1">
+              <Input label="GSTIN" value={form.gstin} onChange={(e) => set('gstin', e.target.value)} placeholder="07ABCDE1234F1Z5" />
+              {gstCheck && (
+                <div className={`text-xs mt-1 ${gstCheck.valid ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {gstCheck.valid ? '✓ Valid GSTIN' : `✗ ${gstCheck.errors.join('; ')}`}
+                  {gstCheck.breakdown?.stateName && <span className="text-gray-500"> — State: {gstCheck.breakdown.stateName} · PAN: {gstCheck.breakdown.pan}</span>}
+                </div>
+              )}
+            </div>
+            <Button variant="secondary" onClick={verifyGstin}>Verify GSTIN</Button>
+          </div>
           <Input label="Phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
           <Input label="Email" value={form.email} onChange={(e) => set('email', e.target.value)} />
           <Input label="Address" value={form.address} onChange={(e) => set('address', e.target.value)} className="col-span-2" />
