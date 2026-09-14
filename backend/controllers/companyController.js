@@ -3,6 +3,7 @@ import Item from '../models/Item.js';
 import Party from '../models/Party.js';
 import Invoice from '../models/Invoice.js';
 import { validateGstin } from '../utils/gstin.js';
+import { auditFromReq } from '../utils/audit.js';
 
 function gstinError(body) {
   const gstin = String(body.gstin || '').trim();
@@ -26,6 +27,7 @@ export const createCompany = async (req, res) => {
     const gstErr = gstinError(req.body);
     if (gstErr) return res.status(400).json(gstErr);
     const company = await Company.create({ ...req.body, createdBy: req.user._id });
+    await auditFromReq(req, 'create', 'company', company._id.toString(), company.name, {});
     res.status(201).json(company);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -38,6 +40,7 @@ export const updateCompany = async (req, res) => {
     if (gstErr) return res.status(400).json(gstErr);
     const company = await Company.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!company) return res.status(404).json({ message: 'Company not found' });
+    await auditFromReq(req, 'update', 'company', company._id.toString(), company.name, {});
     res.json(company);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -48,6 +51,7 @@ export const deleteCompany = async (req, res) => {
   try {
     const company = await Company.findByIdAndDelete(req.params.id);
     if (!company) return res.status(404).json({ message: 'Company not found' });
+    await auditFromReq(req, 'delete', 'company', company._id.toString(), company.name, {});
     res.json({ message: 'Company deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -109,6 +113,7 @@ export const closeFinancialYear = async (req, res) => {
     company.fyOffset = (company.fyOffset || 0) + 1;
     const nextYearPrefix = (new Date().getFullYear() + company.fyOffset).toString().slice(-2) + (new Date().getFullYear() + company.fyOffset + 1).toString().slice(-2);
     await company.save();
+    await auditFromReq(req, 'close_fy', 'company', company._id.toString(), company.name, { nextYearPrefix, partiesUpdated });
 
     res.json({
       message: 'Financial year closed. Party dues carried forward as opening balances; new bill numbers will start fresh in the new year.',

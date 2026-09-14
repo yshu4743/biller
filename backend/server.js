@@ -24,6 +24,8 @@ import godownRoutes from './routes/godownRoutes.js';
 import gstRoutes from './routes/gstRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import backupRoutes from './routes/backupRoutes.js';
+import auditRoutes from './routes/auditRoutes.js';
 
 dotenv.config();
 
@@ -46,6 +48,8 @@ app.use('/api/godowns', godownRoutes);
 app.use('/api/gst', gstRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/backup', backupRoutes);
+app.use('/api/audit', auditRoutes);
 
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
 if (fs.existsSync(distPath)) {

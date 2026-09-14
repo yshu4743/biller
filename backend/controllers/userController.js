@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
+import { auditFromReq } from '../utils/audit.js';
 
 export const listUsers = async (req, res) => {
   try {
@@ -26,6 +27,7 @@ export const createUser = async (req, res) => {
       role: role || 'salesman',
       createdBy: req.user._id,
     });
+    await auditFromReq(req, 'create', 'user', user._id.toString(), user.name, { email: user.email, role: user.role });
     res.status(201).json({ _id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, isActive: user.isActive });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -44,6 +46,7 @@ export const updateUser = async (req, res) => {
     if (isActive !== undefined) user.isActive = isActive;
     if (password) user.password = await bcrypt.hash(password, 10);
     await user.save();
+    await auditFromReq(req, 'update', 'user', user._id.toString(), user.name, { email: user.email, role: user.role });
     res.json({ _id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, isActive: user.isActive });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -57,6 +60,7 @@ export const deleteUser = async (req, res) => {
     }
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
+    await auditFromReq(req, 'delete', 'user', user._id.toString(), user.name, { email: user.email });
     res.json({ message: 'User deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

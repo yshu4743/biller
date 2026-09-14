@@ -2,6 +2,7 @@ import Payment from '../models/Payment.js';
 import Party from '../models/Party.js';
 import Invoice from '../models/Invoice.js';
 import Purchase from '../models/Purchase.js';
+import { auditFromReq } from '../utils/audit.js';
 
 export const listPayments = async (req, res) => {
   try {
@@ -61,6 +62,7 @@ export const createPayment = async (req, res) => {
       }
     }
 
+    await auditFromReq(req, 'create', 'payment', payment._id.toString(), reference || '', { type, amount: Number(amount), mode: payment.mode });
     res.status(201).json(payment);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -90,6 +92,7 @@ export const deletePayment = async (req, res) => {
       }
     }
     await Payment.findByIdAndDelete(req.params.id);
+    await auditFromReq(req, 'delete', 'payment', payment._id.toString(), payment.reference || '', { type: payment.type, amount: payment.amount });
     res.json({ message: 'Payment deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

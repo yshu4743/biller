@@ -1,5 +1,6 @@
 import Godown from '../models/Godown.js';
 import Item from '../models/Item.js';
+import { auditFromReq } from '../utils/audit.js';
 
 export const listGodowns = async (req, res) => {
   try {
@@ -16,6 +17,7 @@ export const createGodown = async (req, res) => {
     if (!name) return res.status(400).json({ message: 'Godown name is required' });
     const existing = await Godown.countDocuments();
     const godown = await Godown.create({ ...req.body, isDefault: existing === 0, createdBy: req.user._id });
+    await auditFromReq(req, 'create', 'godown', godown._id.toString(), godown.name, {});
     res.status(201).json(godown);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -26,6 +28,7 @@ export const updateGodown = async (req, res) => {
   try {
     const godown = await Godown.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!godown) return res.status(404).json({ message: 'Godown not found' });
+    await auditFromReq(req, 'update', 'godown', godown._id.toString(), godown.name, {});
     res.json(godown);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -42,6 +45,7 @@ export const deleteGodown = async (req, res) => {
     );
     await Item.updateMany({ defaultGodown: godown._id }, { $unset: { defaultGodown: 1 } });
     await Godown.findByIdAndDelete(req.params.id);
+    await auditFromReq(req, 'delete', 'godown', godown._id.toString(), godown.name, {});
     res.json({ message: 'Godown deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -72,6 +76,7 @@ export const transferStock = async (req, res) => {
     else item.godowns.push({ godown: toGodown, qty: amount });
 
     await item.save();
+    await auditFromReq(req, 'transfer', 'item', item._id.toString(), item.name, { fromGodown, toGodown, qty: amount });
     res.json(item);
   } catch (error) {
     res.status(500).json({ message: error.message });

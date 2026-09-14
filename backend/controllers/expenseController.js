@@ -1,4 +1,5 @@
 import Expense from '../models/Expense.js';
+import { auditFromReq } from '../utils/audit.js';
 
 export const listExpenses = async (req, res) => {
   try {
@@ -22,6 +23,7 @@ export const createExpense = async (req, res) => {
     const { amount } = req.body;
     if (!amount) return res.status(400).json({ message: 'Amount is required' });
     const expense = await Expense.create({ ...req.body, createdBy: req.user._id });
+    await auditFromReq(req, 'create', 'expense', expense._id.toString(), '', { amount: expense.amount, category: expense.category, date: expense.expenseDate });
     res.status(201).json(expense);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -34,6 +36,7 @@ export const updateExpense = async (req, res) => {
     if (!expense) return res.status(404).json({ message: 'Expense not found' });
     Object.assign(expense, req.body);
     await expense.save();
+    await auditFromReq(req, 'update', 'expense', expense._id.toString(), '', { amount: expense.amount });
     res.json(expense);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -44,6 +47,7 @@ export const deleteExpense = async (req, res) => {
   try {
     const expense = await Expense.findByIdAndDelete(req.params.id);
     if (!expense) return res.status(404).json({ message: 'Expense not found' });
+    await auditFromReq(req, 'delete', 'expense', expense._id.toString(), '', { amount: expense.amount });
     res.json({ message: 'Expense deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -3,6 +3,7 @@ import BillCounter from '../models/BillCounter.js';
 import Item from '../models/Item.js';
 import Party from '../models/Party.js';
 import Company from '../models/Company.js';
+import { auditFromReq } from '../utils/audit.js';
 
 function toWords(num) {
   if (num === 0) return 'Zero';
@@ -198,6 +199,7 @@ async function buildInvoice(userId, body) {
 export const createInvoice = async (req, res) => {
   try {
     const invoice = await buildInvoice(req.user._id, req.body);
+    await auditFromReq(req, 'create', 'invoice', invoice._id.toString(), invoice.billNumber, { invoiceType: invoice.invoiceType, total: invoice.total, party: invoice.partySnapshot?.name });
     res.status(201).json(invoice);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -256,6 +258,7 @@ export const convertToSale = async (req, res) => {
 
     source.convertedTo = sale._id;
     await source.save();
+    await auditFromReq(req, 'convert', 'invoice', source._id.toString(), `${source.billNumber} -> ${sale.billNumber}`, { invoiceType: source.invoiceType, total: sale.total });
     res.status(201).json({ invoice: sale, source });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -349,6 +352,7 @@ export const deleteInvoice = async (req, res) => {
       }
     }
     await Invoice.findByIdAndDelete(req.params.id);
+    await auditFromReq(req, 'delete', 'invoice', invoice._id.toString(), invoice.billNumber, { invoiceType: invoice.invoiceType, total: invoice.total });
     res.json({ message: 'Invoice deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -366,6 +370,7 @@ export const updatePaymentStatus = async (req, res) => {
     else invoice.status = 'unpaid';
     invoice.dueAmount = invoice.total - paidAmount;
     await invoice.save();
+    await auditFromReq(req, 'payment_update', 'invoice', invoice._id.toString(), invoice.billNumber, { paidAmount, status: invoice.status });
     res.json(invoice);
   } catch (error) {
     res.status(500).json({ message: error.message });

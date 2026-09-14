@@ -165,7 +165,11 @@ const Billing = () => {
   const handleSearchKey = (e) => {
     if (e.key === 'Enter' && searchResults.length > 0) {
       e.preventDefault();
-      addToCart(searchResults[0]);
+      const q = String(search).trim().toLowerCase();
+      const exact =
+        items.find((it) => it.barcode && it.barcode.toLowerCase() === q) ||
+        items.find((it) => it.sku && it.sku.toLowerCase() === q);
+      addToCart(exact || searchResults[0]);
     }
   };
 

@@ -1,5 +1,6 @@
 import Party from '../models/Party.js';
 import { validateGstin } from '../utils/gstin.js';
+import { auditFromReq } from '../utils/audit.js';
 
 function gstinError(body) {
   const gstin = String(body.gstin || '').trim();
@@ -37,6 +38,7 @@ export const createParty = async (req, res) => {
     const gstErr = gstinError(req.body);
     if (gstErr) return res.status(400).json(gstErr);
     const party = await Party.create({ ...req.body, createdBy: req.user._id });
+    await auditFromReq(req, 'create', 'party', party._id.toString(), party.name, { partyType: party.partyType });
     res.status(201).json(party);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -51,6 +53,7 @@ export const updateParty = async (req, res) => {
     if (gstErr) return res.status(400).json(gstErr);
     Object.assign(party, req.body);
     await party.save();
+    await auditFromReq(req, 'update', 'party', party._id.toString(), party.name, {});
     res.json(party);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -61,6 +64,7 @@ export const deleteParty = async (req, res) => {
   try {
     const party = await Party.findByIdAndDelete(req.params.id);
     if (!party) return res.status(404).json({ message: 'Party not found' });
+    await auditFromReq(req, 'delete', 'party', party._id.toString(), party.name, {});
     res.json({ message: 'Party deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -1,4 +1,5 @@
 import Item from '../models/Item.js';
+import { auditFromReq } from '../utils/audit.js';
 
 function sumGodownStock(godowns) {
   if (!Array.isArray(godowns) || godowns.length === 0) return null;
@@ -37,6 +38,7 @@ export const createItem = async (req, res) => {
     const godownStock = sumGodownStock(req.body.godowns);
     const effectiveStock = godownStock !== null && !req.body.isService ? godownStock : stock;
     const item = await Item.create({ ...req.body, openingStock: effectiveStock !== undefined ? effectiveStock : req.body.openingStock, stock: effectiveStock !== undefined ? effectiveStock : req.body.stock, createdBy: req.user._id });
+    await auditFromReq(req, 'create', 'item', item._id.toString(), item.name, { stock: item.stock });
     res.status(201).json(item);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -60,6 +62,7 @@ export const bulkCreateItems = async (req, res) => {
       };
     });
     const created = await Item.insertMany(payload);
+    await auditFromReq(req, 'bulk_create', 'item', '', '', { count: created.length });
     res.status(201).json({ count: created.length, items: created });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -76,6 +79,7 @@ export const updateItem = async (req, res) => {
     if (godownStock !== null && !rest.isService) item.stock = godownStock;
     else if (stock !== undefined) item.stock = stock;
     await item.save();
+    await auditFromReq(req, 'update', 'item', item._id.toString(), item.name, { stock: item.stock });
     res.json(item);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -86,6 +90,7 @@ export const deleteItem = async (req, res) => {
   try {
     const item = await Item.findByIdAndDelete(req.params.id);
     if (!item) return res.status(404).json({ message: 'Item not found' });
+    await auditFromReq(req, 'delete', 'item', item._id.toString(), item.name, {});
     res.json({ message: 'Item deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -105,6 +110,7 @@ export const adjustStock = async (req, res) => {
       if (target) target.qty += amount;
     }
     await item.save();
+    await auditFromReq(req, 'adjust_stock', 'item', item._id.toString(), item.name, { adjustment: amount, reason: reason || '' });
     res.json(item);
   } catch (error) {
     res.status(500).json({ message: error.message });

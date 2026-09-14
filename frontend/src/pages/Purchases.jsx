@@ -70,9 +70,20 @@ const PurchasePage = () => {
   };
 
   const handleDelete = async (p) => {
-    if (!confirm(`Delete purchase ${p.purchaseBillNumber}? Stock will be reduced.`)) return;
+    if (!confirm(`Delete purchase ${p.purchaseBillNumber}? Stock will be ${p.type === 'purchase_return' ? 'restored' : 'reduced'}.`)) return;
     await api.delete(`/purchases/${p._id}`);
     load();
+  };
+
+  const handleReturn = async (p) => {
+    if (!confirm(`Record a purchase return (debit note) for ${p.purchaseBillNumber}? This reduces stock and creates a PRT entry.`)) return;
+    setError('');
+    try {
+      await api.post(`/purchases/${p._id}/return`);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to record return');
+    }
   };
 
   return (
@@ -111,17 +122,25 @@ const PurchasePage = () => {
               <tbody>
                 {purchases.map((p) => (
                   <tr key={p._id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4 font-medium text-indigo-600">{p.purchaseBillNumber}</td>
+                    <td className="py-3 px-4">
+                      <p className="font-medium text-indigo-600">{p.purchaseBillNumber}</p>
+                      {p.type === 'purchase_return' && <Badge color="red">Return</Badge>}
+                    </td>
                     <td className="py-3 px-4">{p.party?.name || p.partySnapshot || '-'}</td>
                     <td className="py-3 px-4 text-gray-500">{formatDate(p.date)}</td>
                     <td className="py-3 px-4 text-right">{p.items.length}</td>
                     <td className="py-3 px-4 text-right font-semibold">₹ {formatCurrency(p.total)}</td>
                     <td className="py-3 px-4 text-right text-gray-500">₹ {formatCurrency(p.paidAmount)}</td>
                     <td className="py-3 px-4 text-center">
-                      <Badge color={p.status === 'paid' ? 'green' : p.status === 'partial' ? 'yellow' : 'red'}>{p.status}</Badge>
+                      <Badge color={p.type === 'purchase_return' ? 'yellow' : p.status === 'paid' ? 'green' : p.status === 'partial' ? 'yellow' : 'red'}>{p.type === 'purchase_return' ? 'adjusted' : p.status}</Badge>
                     </td>
                     <td className="py-3 px-4">
-                      <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                      <div className="flex items-center gap-2">
+                        {p.type === 'purchase' && (
+                          <button onClick={() => handleReturn(p)} title="Record purchase return" className="text-xs font-medium text-red-600 hover:underline">Return</button>
+                        )}
+                        <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}

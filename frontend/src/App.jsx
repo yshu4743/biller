@@ -21,6 +21,7 @@ import Godowns from './pages/Godowns.jsx';
 import Users from './pages/Users.jsx';
 import Register from './pages/Register.jsx';
 import Settings from './pages/Settings.jsx';
+import ActivityLog from './pages/ActivityLog.jsx';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -66,6 +67,7 @@ function App() {
             <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
             <Route path="/register" element={<AdminRoute><Register /></AdminRoute>} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/activity" element={<AdminRoute><ActivityLog /></AdminRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

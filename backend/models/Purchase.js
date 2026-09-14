@@ -33,6 +33,8 @@ const purchaseSchema = new mongoose.Schema(
     status: { type: String, enum: ['paid', 'unpaid', 'partial'], default: 'unpaid' },
     dueAmount: { type: Number, default: 0 },
     notes: { type: String, default: '' },
+    type: { type: String, enum: ['purchase', 'purchase_return'], default: 'purchase' },
+    returnedOf: { type: mongoose.Schema.Types.ObjectId, ref: 'Purchase', default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     date: { type: Date, default: Date.now },
   },

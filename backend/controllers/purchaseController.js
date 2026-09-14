@@ -3,11 +3,11 @@ import Item from '../models/Item.js';
 import Company from '../models/Company.js';
 import BillCounter from '../models/BillCounter.js';
 import Party from '../models/Party.js';
+import { auditFromReq } from '../utils/audit.js';
 
-async function generatePurchaseBillNumber(companyId) {
+async function generatePurchaseBillNumber(companyId, prefix = 'PUR') {
   const fy = new Date().getFullYear();
   const fyStr = fy.toString().slice(-2) + (fy + 1).toString().slice(-2);
-  const prefix = 'PUR';
   const counter = await BillCounter.findOneAndUpdate(
     { company: companyId, prefix, year: fyStr },
     { $inc: { sequence: 1 } },
@@ -81,7 +81,52 @@ export const createPurchase = async (req, res) => {
       createdBy: req.user._id,
     });
 
+    await auditFromReq(req, 'create', 'purchase', purchase._id.toString(), purchase.purchaseBillNumber, { total: purchase.total, items: purchase.items.length });
     res.status(201).json(purchase);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const createPurchaseReturn = async (req, res) => {
+  try {
+    const source = await Purchase.findById(req.params.id);
+    if (!source) return res.status(404).json({ message: 'Purchase not found' });
+    if (source.type === 'purchase_return') return res.status(400).json({ message: 'A return is already recorded for this purchase' });
+    if (!source.items || source.items.length === 0) return res.status(400).json({ message: 'Cannot return a purchase with no items' });
+
+    const purchaseBillNumber = await generatePurchaseBillNumber(source.company, 'PRT');
+    const ret = await Purchase.create({
+      purchaseBillNumber,
+      company: source.company,
+      party: source.party,
+      partySnapshot: source.partySnapshot,
+      items: source.items.map((it) => it.toObject()),
+      subtotal: source.subtotal,
+      discountType: source.discountType,
+      discountValue: source.discountValue,
+      discountAmount: source.discountAmount,
+      taxable: source.taxable,
+      totalGst: source.totalGst,
+      total: source.total,
+      paymentMode: source.paymentMode,
+      paidAmount: 0,
+      status: 'unpaid',
+      dueAmount: 0,
+      notes: source.notes ? `Return of ${source.purchaseBillNumber} — ${source.notes}` : `Return of ${source.purchaseBillNumber}`,
+      type: 'purchase_return',
+      returnedOf: source._id,
+      createdBy: req.user._id,
+    });
+
+    for (const entry of source.items) {
+      if (entry.item) {
+        await Item.findByIdAndUpdate(entry.item, { $inc: { stock: -entry.quantity } });
+      }
+    }
+
+    await auditFromReq(req, 'return', 'purchase', source._id.toString(), `${source.purchaseBillNumber} -> ${purchaseBillNumber}`, { total: source.total });
+    res.status(201).json(ret);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -118,11 +163,20 @@ export const deletePurchase = async (req, res) => {
   try {
     const purchase = await Purchase.findById(req.params.id);
     if (!purchase) return res.status(404).json({ message: 'Purchase not found' });
-    for (const entry of purchase.items) {
-      if (entry.item) {
-        await Item.findByIdAndUpdate(entry.item, { $inc: { stock: -entry.quantity } });
+    if (purchase.type === 'purchase') {
+      for (const entry of purchase.items) {
+        if (entry.item) {
+          await Item.findByIdAndUpdate(entry.item, { $inc: { stock: -entry.quantity } });
+        }
+      }
+    } else {
+      for (const entry of purchase.items) {
+        if (entry.item) {
+          await Item.findByIdAndUpdate(entry.item, { $inc: { stock: entry.quantity } });
+        }
       }
     }
+    await auditFromReq(req, 'delete', 'purchase', purchase._id.toString(), purchase.purchaseBillNumber, { type: purchase.type });
     await Purchase.findByIdAndDelete(req.params.id);
     res.json({ message: 'Purchase deleted' });
   } catch (error) {
