@@ -54,7 +54,7 @@ app.use('/api/audit', auditRoutes);
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-  app.get(/^\/(?!api\/).*/, (req, res) => {
+  app.get(/^\/(?!api\/).*[^.\w]$/, (req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
   console.log('Serving frontend from', distPath);
