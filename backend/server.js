@@ -61,9 +61,9 @@ if (fs.existsSync(distPath)) {
 }
 
 const seedAdmin = async () => {
-  const count = await User.countDocuments();
-  if (count === 0) {
-    const email = (process.env.ADMIN_EMAIL || 'admin@biller.com').toLowerCase();
+  const email = (process.env.ADMIN_EMAIL || 'admin@biller.com').toLowerCase();
+  const adminExists = await User.findOne({ $or: [{ email }, { role: 'admin' }] });
+  if (!adminExists) {
     const password = process.env.ADMIN_PASSWORD || 'admin123';
     const hashed = await bcrypt.hash(password, 10);
     await User.create({
