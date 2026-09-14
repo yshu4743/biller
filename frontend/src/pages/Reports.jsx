@@ -52,6 +52,13 @@ const Reports = () => {
     loadData();
   }, [tab, from, to, partyId, bookDate]);
 
+  const switchTab = (t) => {
+    if (t === tab) return;
+    setData(null);
+    setError('');
+    setTab(t);
+  };
+
   const print = () => window.print();
 
   return (
@@ -66,7 +73,7 @@ const Reports = () => {
 
       <div className="flex flex-wrap gap-2">
         {tabs.map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === t ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+          <button key={t} onClick={() => switchTab(t)} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === t ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
             {t}
           </button>
         ))}
@@ -95,7 +102,7 @@ const Reports = () => {
 
       {loading && <Spinner />}
 
-      {data && tab === 'Sales Report' && (data.invoices.length === 0 ? (
+      {data && Array.isArray(data.invoices) && tab === 'Sales Report' && (data.invoices.length === 0 ? (
         <Card className="p-4"><EmptyState message="No sales found in the selected date range." /></Card>
       ) : (
         <Card className="overflow-x-auto p-4" id="print-area">
@@ -127,7 +134,7 @@ const Reports = () => {
           </Card>
         ))}
 
-      {data && tab === 'GST Summary' && (data.summary.length === 0 ? (
+      {data && Array.isArray(data.summary) && tab === 'GST Summary' && (data.summary.length === 0 ? (
         <Card className="p-4"><EmptyState message="No GST data available in the selected date range." /></Card>
       ) : (
         <Card className="overflow-x-auto p-4">
@@ -162,7 +169,7 @@ const Reports = () => {
         </Card>
         ))}
 
-      {data && tab === 'Stock Report' && (data.items.length === 0 ? (
+      {data && Array.isArray(data.items) && tab === 'Stock Report' && (data.items.length === 0 ? (
         <Card className="p-4"><EmptyState message="No stock items found." /></Card>
       ) : (
         <Card className="overflow-x-auto p-4">
@@ -191,7 +198,7 @@ const Reports = () => {
         </Card>
         ))}
 
-      {data && tab === 'Profit & Loss' && (
+      {data && data.grossProfit !== undefined && tab === 'Profit & Loss' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="p-5">
             <h3 className="font-bold text-gray-800 mb-4">Income</h3>
@@ -213,7 +220,7 @@ const Reports = () => {
         </div>
       )}
 
-      {data && tab === 'Party Statement' && (data.entries.length === 0 ? (
+      {data && Array.isArray(data.entries) && tab === 'Party Statement' && (data.entries.length === 0 ? (
         <Card className="p-4"><EmptyState message="No transactions found for this party." /></Card>
       ) : (
         <Card className="overflow-x-auto p-4">
@@ -241,7 +248,7 @@ const Reports = () => {
         </Card>
         ))}
 
-      {data && tab === 'Day Book' && (
+      {data && Array.isArray(data.payments) && tab === 'Day Book' && (
         <div className="space-y-4">
           <Card className="p-4">
             <h3 className="font-bold text-gray-800 mb-3">Sales ({formatDate(bookDate)})</h3>
