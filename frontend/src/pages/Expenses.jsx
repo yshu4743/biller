@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pencil, Trash2, Plus } from 'lucide-react';
 import api from '../api/axios.js';
-import { Card, Button, Input, Select, Modal, Badge, Spinner, EmptyState } from '../components/ui.jsx';
+import { Card, Button, Input, Select, Modal, Badge, Spinner, EmptyState, ErrorState } from '../components/ui.jsx';
 import { formatCurrency, formatDate } from '../utils/format.js';
 
 const emptyForm = { expenseDate: '', category: 'General', amount: 0, mode: 'cash', note: '' };
@@ -11,6 +11,7 @@ const modes = ['cash', 'upi', 'card', 'bank', 'cheque'];
 const Expenses = () => {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -21,7 +22,7 @@ const Expenses = () => {
     const params = {};
     if (from) params.from = from;
     if (to) params.to = to;
-    api.get('/expenses', { params }).then((res) => setExpenses(res.data)).finally(() => setLoading(false));
+    api.get('/expenses', { params }).then((res) => { setError(''); setExpenses(res.data); }).catch((err) => setError(err?.response?.data?.message || 'Failed to load expenses.')).finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, [from, to]);
 
@@ -50,6 +51,7 @@ const Expenses = () => {
 
   return (
     <div className="space-y-5">
+      {error && <ErrorState message={error} />}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Expenses</h2>

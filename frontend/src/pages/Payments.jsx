@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowDownCircle, ArrowUpCircle, Trash2, Smartphone } from 'lucide-react';
 import api from '../api/axios.js';
-import { Card, Button, Input, Select, Modal, Badge, Spinner, EmptyState } from '../components/ui.jsx';
+import { Card, Button, Input, Select, Modal, Badge, Spinner, EmptyState, ErrorState } from '../components/ui.jsx';
 import { formatCurrency, formatDate } from '../utils/format.js';
 
 const Payments = () => {
@@ -10,22 +10,29 @@ const Payments = () => {
   const [parties, setParties] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [type, setType] = useState('received');
   const [form, setForm] = useState({ party: '', type: 'received', amount: 0, mode: 'cash', date: new Date().toISOString().slice(0, 10), invoice: '', reference: '', note: '' });
 
   const load = async () => {
-    const [p, o, allParties, invs] = await Promise.all([
-      api.get('/payments'),
-      api.get('/payments/outstanding'),
-      api.get('/parties'),
-      api.get('/invoices'),
-    ]);
-    setPayments(p.data);
-    setOutstanding(o.data);
-    setParties(allParties.data);
-    setInvoices(invs.data.invoices || []);
-    setLoading(false);
+    setError('');
+    try {
+      const [p, o, allParties, invs] = await Promise.all([
+        api.get('/payments'),
+        api.get('/payments/outstanding'),
+        api.get('/parties'),
+        api.get('/invoices'),
+      ]);
+      setPayments(p.data);
+      setOutstanding(o.data);
+      setParties(allParties.data);
+      setInvoices(invs.data.invoices || []);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to load payments.');
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); }, []);
 
@@ -67,6 +74,7 @@ const Payments = () => {
 
   return (
     <div className="space-y-5">
+      {error && <ErrorState message={error} />}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Payments & Dues</h2>

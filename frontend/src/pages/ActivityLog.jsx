@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios.js';
-import { Card, Select, Button, Spinner, EmptyState } from '../components/ui.jsx';
+import { Card, Select, Button, Spinner, EmptyState, ErrorState } from '../components/ui.jsx';
 
 const ACTION_COLORS = {
   create: 'green', update: 'blue', delete: 'red', convert: 'indigo',
@@ -16,6 +16,7 @@ const ActivityLog = () => {
   const [entity, setEntity] = useState('');
   const [action, setAction] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -26,9 +27,11 @@ const ActivityLog = () => {
       const res = await api.get('/audit', { params });
       setLogs(res.data.logs || []);
       setTotal(res.data.total || 0);
+      setError('');
     } catch (err) {
       setLogs([]);
       setTotal(0);
+      setError(err?.response?.data?.message || 'Failed to load activity log.');
     } finally {
       setLoading(false);
     }
@@ -65,6 +68,8 @@ const ActivityLog = () => {
           <Button variant="secondary" onClick={() => { setEntity(''); setAction(''); setPage(1); }}>Clear Filters</Button>
         </div>
       </Card>
+
+      {error && <ErrorState message={error} />}
 
       {loading ? (
         <Spinner />

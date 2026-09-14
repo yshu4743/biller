@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios.js';
-import { Card, Select, Input, Button, Spinner, EmptyState } from '../components/ui.jsx';
+import { Card, Select, Input, Button, Spinner, EmptyState, ErrorState } from '../components/ui.jsx';
 import { formatCurrency } from '../utils/format.js';
 
 const defaultFrom = () => {
@@ -34,35 +34,50 @@ const Gst = () => {
   const [rateData, setRateData] = useState(null);
   const [exportData, setExportData] = useState(null);
   const [g3b, setG3b] = useState(null);
+  const [apiError, setApiError] = useState('');
 
   const loadSummary = async () => {
-    const params = { from, to };
-    const [g, r] = await Promise.all([api.get('/reports/gstr1', { params }), api.get('/reports/gst', { params })]);
-    setData(g.data);
-    setRateData(r.data);
+    setApiError('');
+    try {
+      const params = { from, to };
+      const [g, r] = await Promise.all([api.get('/reports/gstr1', { params }), api.get('/reports/gst', { params })]);
+      setData(g.data);
+      setRateData(r.data);
+    } catch (err) {
+      setData(null);
+      setRateData(null);
+      setApiError(err?.response?.data?.message || 'Failed to load GST data.');
+    }
   };
 
   const loadExport = async () => {
-    const res = await api.get('/reports/gstr1/export', { params: { from, to } });
-    setExportData(res.data);
+    setApiError('');
+    try {
+      const res = await api.get('/reports/gstr1/export', { params: { from, to } });
+      setExportData(res.data);
+    } catch (err) {
+      setExportData(null);
+      setApiError(err?.response?.data?.message || 'Failed to load GST export data.');
+    }
   };
 
   const loadG3b = async () => {
-    const res = await api.get('/reports/gstr3b', { params: { from, to } });
-    setG3b(res.data);
+    setApiError('');
+    try {
+      const res = await api.get('/reports/gstr3b', { params: { from, to } });
+      setG3b(res.data);
+    } catch (err) {
+      setG3b(null);
+      setApiError(err?.response?.data?.message || 'Failed to load GSTR-3B data.');
+    }
   };
 
   const load = async () => {
     setLoading(true);
-    try {
-      if (tab === 'summary') await loadSummary();
-      else if (tab === 'export') await loadExport();
-      else await loadG3b();
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to load GST data');
-    } finally {
-      setLoading(false);
-    }
+    if (tab === 'summary') await loadSummary();
+    else if (tab === 'export') await loadExport();
+    else await loadG3b();
+    setLoading(false);
   };
 
   const switchTab = (t) => {
@@ -70,9 +85,10 @@ const Gst = () => {
   };
 
   useEffect(() => {
-    if (tab === 'summary') loadSummary();
-    else if (tab === 'export') loadExport();
-    else loadG3b();
+    setLoading(true);
+    if (tab === 'summary') loadSummary().finally(() => setLoading(false));
+    else if (tab === 'export') loadExport().finally(() => setLoading(false));
+    else loadG3b().finally(() => setLoading(false));
     // eslint-disable-next-line
   }, [tab]);
 
@@ -122,6 +138,8 @@ const Gst = () => {
           </div>
         </div>
       </Card>
+
+      {apiError && !loading && <ErrorState message={apiError} />}
 
       {loading ? (
         <Spinner />

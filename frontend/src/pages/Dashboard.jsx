@@ -3,17 +3,33 @@ import { Link } from 'react-router-dom';
 import { IndianRupee, Receipt, ArrowDownCircle, AlertTriangle, TrendingUp, Wallet } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import api from '../api/axios.js';
-import { Card, StatCard, Spinner, Badge } from '../components/ui.jsx';
+import { Card, StatCard, Spinner, Badge, Button, ErrorState } from '../components/ui.jsx';
 import { formatCurrency } from '../utils/format.js';
 
 const Dashboard = () => {
   const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api.get('/dashboard').then((res) => setData(res.data)).catch(() => setData(null));
-  }, []);
+  const loadData = () => {
+    setError('');
+    setLoading(true);
+    api.get('/dashboard').then((res) => setData(res.data))
+      .catch((err) => { setData(null); setError(err?.response?.data?.message || 'Failed to load dashboard data.'); })
+      .finally(() => setLoading(false));
+  };
 
-  if (!data) return <Spinner />;
+  useEffect(() => { loadData(); }, []);
+
+  if (loading) return <Spinner />;
+  if (error || !data) return (
+    <div className="max-w-lg mx-auto">
+      <ErrorState message={error || 'No dashboard data available.'} />
+      <div className="text-center mt-4">
+        <Button onClick={loadData}>Retry</Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">

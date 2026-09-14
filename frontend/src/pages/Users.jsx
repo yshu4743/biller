@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pencil, Trash2, UserPlus, Mail } from 'lucide-react';
 import api from '../api/axios.js';
-import { Card, Button, Input, Select, Modal, Badge, Spinner, EmptyState } from '../components/ui.jsx';
+import { Card, Button, Input, Select, Modal, Badge, Spinner, EmptyState, ErrorState } from '../components/ui.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatDate } from '../utils/format.js';
 
@@ -11,11 +11,12 @@ const Users = () => {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
-  const load = () => api.get('/users').then((res) => setUsers(res.data)).finally(() => setLoading(false));
+  const load = () => api.get('/users').then((res) => { setError(''); setUsers(res.data); }).catch((err) => setError(err?.response?.data?.message || 'Failed to load users.')).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
 
   const openCreate = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
@@ -50,6 +51,7 @@ const Users = () => {
 
   return (
     <div className="space-y-5">
+      {error && <ErrorState message={error} />}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Staff Users</h2>

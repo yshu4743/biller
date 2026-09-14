@@ -123,6 +123,12 @@ export const EmptyState = ({ message }) => (
   </div>
 );
 
+export const ErrorState = ({ message = 'Something went wrong. Please try again.' }) => (
+  <div role="alert" className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-4 py-3 text-sm">
+    {message}
+  </div>
+);
+
 export const SearchInput = React.forwardRef(({ value, onChange, placeholder = 'Search...', className = '', ...props }, ref) => (
   <div className={`relative ${className}`}>
     <input

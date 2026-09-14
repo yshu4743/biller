@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios.js';
-import { Card, Button, Input, Select, Modal, Spinner, EmptyState } from '../components/ui.jsx';
+import { Card, Button, Input, Select, Modal, Spinner, EmptyState, ErrorState } from '../components/ui.jsx';
 import { Warehouse, Trash2, Pencil, Plus, ArrowLeftRight } from 'lucide-react';
 
 const Godowns = () => {
   const [godowns, setGodowns] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', address: '' });
@@ -16,10 +17,16 @@ const Godowns = () => {
 
   const load = async () => {
     setLoading(true);
-    const [g, i] = await Promise.all([api.get('/godowns'), api.get('/items')]);
-    setGodowns(g.data);
-    setItems(i.data);
-    setLoading(false);
+    setError('');
+    try {
+      const [g, i] = await Promise.all([api.get('/godowns'), api.get('/items')]);
+      setGodowns(g.data);
+      setItems(i.data);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to load godowns.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -60,6 +67,7 @@ const Godowns = () => {
 
   return (
     <div className="space-y-5">
+      {error && <ErrorState message={error} />}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Godowns / Warehouses</h2>

@@ -20,9 +20,10 @@ const PurchasePage = () => {
   const [showList, setShowList] = useState(true);
 
   const load = () => {
+    setError('');
     api.get('/parties').then((res) => setParties(res.data));
     api.get('/items').then((res) => setItems(res.data));
-    api.get('/purchases').then((res) => setPurchases(res.data));
+    api.get('/purchases').then((res) => setPurchases(res.data)).catch((err) => setError(err?.response?.data?.message || 'Failed to load purchases.'));
   };
   useEffect(() => { load(); }, []);
 

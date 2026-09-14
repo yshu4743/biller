@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Printer } from 'lucide-react';
 import api from '../api/axios.js';
-import { Card, Button, Input, Select, Spinner } from '../components/ui.jsx';
+import { Card, Button, Input, Select, Spinner, EmptyState } from '../components/ui.jsx';
 import { formatCurrency, formatDate } from '../utils/format.js';
+
+const Alert = ({ children }) => (
+  <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-4 py-3 text-sm">
+    {children}
+  </div>
+);
 
 const tabs = ['Sales Report', 'GST Summary', 'Stock Report', 'Profit & Loss', 'Party Statement', 'Day Book'];
 
@@ -11,6 +17,7 @@ const Reports = () => {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState(null);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [parties, setParties] = useState([]);
   const [partyId, setPartyId] = useState('');
@@ -19,6 +26,7 @@ const Reports = () => {
   const loadData = () => {
     setLoading(true);
     setData(null);
+    setError('');
     let req;
     if (tab === 'Sales Report') req = api.get('/reports/sales', { params: { from, to } });
     else if (tab === 'GST Summary') req = api.get('/reports/gst', { params: { from, to } });
@@ -26,7 +34,7 @@ const Reports = () => {
     else if (tab === 'Profit & Loss') req = api.get('/reports/profit-loss', { params: { from, to } });
     else if (tab === 'Party Statement') req = api.get(`/reports/party-statement/${partyId}`);
     else req = api.get('/reports/day-book', { params: { date: bookDate } });
-    req.then((res) => setData(res.data)).catch(() => setData(null)).finally(() => setLoading(false));
+    req.then((res) => setData(res.data)).catch((err) => { setData(null); setError(err?.response?.data?.message || 'Failed to load report. Please try again.'); }).finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -75,9 +83,16 @@ const Reports = () => {
         <Input type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)} className="w-44" />
       )}
 
+      {tab === 'Party Statement' && !partyId && !loading && (
+        <Alert>Warning: Select a party to view their statement.</Alert>
+      )}
+      {error && !loading && <Alert>Warning: {error}</Alert>}
+
       {loading && <Spinner />}
 
-      {data && tab === 'Sales Report' && (
+      {data && tab === 'Sales Report' && (data.invoices.length === 0 ? (
+        <Card className="p-4"><EmptyState message="No sales found in the selected date range." /></Card>
+      ) : (
         <Card className="overflow-x-auto p-4" id="print-area">
           <h3 className="font-bold text-gray-800 mb-4">Sales Report {from && to ? `(${from} to ${to})` : ''}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -104,10 +119,12 @@ const Reports = () => {
               ))}
             </tbody>
           </table>
-        </Card>
-      )}
+          </Card>
+        ))}
 
-      {data && tab === 'GST Summary' && (
+      {data && tab === 'GST Summary' && (data.summary.length === 0 ? (
+        <Card className="p-4"><EmptyState message="No GST data available in the selected date range." /></Card>
+      ) : (
         <Card className="overflow-x-auto p-4">
           <h3 className="font-bold text-gray-800 mb-4">GST Summary</h3>
           <table className="w-full text-sm">
@@ -138,9 +155,11 @@ const Reports = () => {
             </tfoot>
           </table>
         </Card>
-      )}
+        ))}
 
-      {data && tab === 'Stock Report' && (
+      {data && tab === 'Stock Report' && (data.items.length === 0 ? (
+        <Card className="p-4"><EmptyState message="No stock items found." /></Card>
+      ) : (
         <Card className="overflow-x-auto p-4">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-gray-800">Stock Report</h3>
@@ -165,7 +184,7 @@ const Reports = () => {
             </tbody>
           </table>
         </Card>
-      )}
+        ))}
 
       {data && tab === 'Profit & Loss' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -189,7 +208,9 @@ const Reports = () => {
         </div>
       )}
 
-      {data && tab === 'Party Statement' && (
+      {data && tab === 'Party Statement' && (data.entries.length === 0 ? (
+        <Card className="p-4"><EmptyState message="No transactions found for this party." /></Card>
+      ) : (
         <Card className="overflow-x-auto p-4">
           <h3 className="font-bold text-gray-800 mb-1">{data.party.name}</h3>
           {data.party.shopName && <p className="text-sm text-gray-500 mb-4">{data.party.shopName}</p>}
@@ -213,7 +234,7 @@ const Reports = () => {
             </tbody>
           </table>
         </Card>
-      )}
+        ))}
 
       {data && tab === 'Day Book' && (
         <div className="space-y-4">

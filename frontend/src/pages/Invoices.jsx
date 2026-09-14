@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Printer, Trash2, FilePlus2, ChevronLeft, ChevronRight, Layers, FileCheck2, Truck, Download, ArrowRightLeft } from 'lucide-react';
 import api from '../api/axios.js';
-import { Card, Button, Select, Input, Badge, SearchInput, Spinner, EmptyState, Modal } from '../components/ui.jsx';
+import { Card, Button, Select, Input, Badge, SearchInput, Spinner, EmptyState, Modal, ErrorState } from '../components/ui.jsx';
 import { formatCurrency, formatDate } from '../utils/format.js';
 
 const typeMeta = {
@@ -16,6 +16,7 @@ const Invoices = () => {
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
@@ -38,15 +39,21 @@ const Invoices = () => {
 
   const load = async (p = page) => {
     setLoading(true);
-    const params = { page: p, limit: 25 };
-    if (search) params.search = search;
-    if (status) params.status = status;
-    if (from) params.from = from;
-    if (to) params.to = to;
-    const res = await api.get('/invoices', { params });
-    setInvoices(res.data.invoices);
-    setPages(res.data.pages);
-    setLoading(false);
+    setError('');
+    try {
+      const params = { page: p, limit: 25 };
+      if (search) params.search = search;
+      if (status) params.status = status;
+      if (from) params.from = from;
+      if (to) params.to = to;
+      const res = await api.get('/invoices', { params });
+      setInvoices(res.data.invoices);
+      setPages(res.data.pages);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to load invoices.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -146,6 +153,7 @@ const Invoices = () => {
 
   return (
     <div className="space-y-5">
+      {error && <ErrorState message={error} />}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Invoices</h2>

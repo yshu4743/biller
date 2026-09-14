@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios.js';
-import { Card, Button, Input, Select, Modal, EmptyState, Spinner } from '../components/ui.jsx';
+import { Card, Button, Input, Select, Modal, EmptyState, Spinner, ErrorState } from '../components/ui.jsx';
 import { getIndiaStates } from '../utils/format.js';
 import { Building2, Pencil } from 'lucide-react';
 
@@ -32,12 +32,13 @@ const columnOptions = [
 const Company = () => {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [gstCheck, setGstCheck] = useState(null);
 
-  const load = () => api.get('/companies').then((res) => setCompanies(res.data)).finally(() => setLoading(false));
+  const load = () => api.get('/companies').then((res) => { setError(''); setCompanies(res.data); }).catch((err) => setError(err?.response?.data?.message || 'Failed to load company details.')).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
 
   const openCreate = () => { setForm(emptyForm); setEditingId(null); setGstCheck(null); setModalOpen(true); };
@@ -99,6 +100,7 @@ const Company = () => {
 
   return (
     <div className="space-y-6">
+      {error && <ErrorState message={error} />}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Company Details</h2>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import api from '../api/axios.js';
-import { Card, Button, Input, Select, Modal, Badge, SearchInput, Spinner, EmptyState } from '../components/ui.jsx';
+import { Card, Button, Input, Select, Modal, Badge, SearchInput, Spinner, EmptyState, ErrorState } from '../components/ui.jsx';
 import { getIndiaStates } from '../utils/format.js';
 
 const emptyForm = {
@@ -13,6 +13,7 @@ const emptyForm = {
 const Parties = () => {
   const [parties, setParties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -20,11 +21,17 @@ const Parties = () => {
   const [gstCheck, setGstCheck] = useState(null);
 
   const load = async () => {
-    const params = {};
-    if (search) params.search = search;
-    const res = await api.get('/parties', { params });
-    setParties(res.data);
-    setLoading(false);
+    setError('');
+    try {
+      const params = {};
+      if (search) params.search = search;
+      const res = await api.get('/parties', { params });
+      setParties(res.data);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to load parties.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, [search]);
@@ -72,6 +79,7 @@ const Parties = () => {
 
   return (
     <div className="space-y-5">
+      {error && <ErrorState message={error} />}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Parties</h2>
