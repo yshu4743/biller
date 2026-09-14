@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Printer } from 'lucide-react';
 import api from '../api/axios.js';
 import { Card, Button, Input, Select, Spinner, EmptyState } from '../components/ui.jsx';
@@ -22,8 +22,10 @@ const Reports = () => {
   const [parties, setParties] = useState([]);
   const [partyId, setPartyId] = useState('');
   const [bookDate, setBookDate] = useState(new Date().toISOString().slice(0, 10));
+  const reqIdRef = useRef(0);
 
   const loadData = () => {
+    const id = ++reqIdRef.current;
     setLoading(true);
     setData(null);
     setError('');
@@ -34,7 +36,9 @@ const Reports = () => {
     else if (tab === 'Profit & Loss') req = api.get('/reports/profit-loss', { params: { from, to } });
     else if (tab === 'Party Statement') req = api.get(`/reports/party-statement/${partyId}`);
     else req = api.get('/reports/day-book', { params: { date: bookDate } });
-    req.then((res) => setData(res.data)).catch((err) => { setData(null); setError(err?.response?.data?.message || 'Failed to load report. Please try again.'); }).finally(() => setLoading(false));
+    req.then((res) => { if (reqIdRef.current === id) setData(res.data); })
+      .catch((err) => { if (reqIdRef.current !== id) return; setData(null); setError(err?.response?.data?.message || 'Failed to load report. Please try again.'); })
+      .finally(() => { if (reqIdRef.current === id) setLoading(false); });
   };
 
   useEffect(() => {
@@ -44,7 +48,8 @@ const Reports = () => {
   }, [tab]);
 
   useEffect(() => {
-    if (!loading && (tab !== 'Party Statement' || partyId)) loadData();
+    if (tab === 'Party Statement' && !partyId) return;
+    loadData();
   }, [tab, from, to, partyId, bookDate]);
 
   const print = () => window.print();
