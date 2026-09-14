@@ -7,7 +7,7 @@ import { Building2, Pencil } from 'lucide-react';
 const emptyForm = {
   name: '', gstin: '', isGstRegistered: false, gstBusinessType: 'regular', phone: '', email: '', address: '',
   city: '', state: '', stateCode: '', pincode: '', website: '', bankName: '',
-  bankAccount: '', bankIfsc: '', upiId: '', invoicePrefix: 'INV', invoiceNote: '', invoiceFooter: '', logo: '',
+  bankAccount: '', bankIfsc: '', upiId: '', invoicePrefix: 'INV', estimatePrefix: 'QTN', challanPrefix: 'DC', creditNotePrefix: 'CN', invoiceNote: '', invoiceFooter: '', logo: '',
   transactionLabels: { sale: 'TAX INVOICE', estimate: 'QUOTATION', challan: 'DELIVERY CHALLAN', sale_return: 'CREDIT NOTE' },
   invoiceColumns: ['hsn'],
   preventNegativeStock: false,
@@ -201,6 +201,12 @@ const Company = () => {
               <Input label="Estimate heading" value={form.transactionLabels.estimate} onChange={(e) => setLabel('estimate', e.target.value)} />
               <Input label="Challan heading" value={form.transactionLabels.challan} onChange={(e) => setLabel('challan', e.target.value)} />
               <Input label="Credit Note heading" value={form.transactionLabels.sale_return} onChange={(e) => setLabel('sale_return', e.target.value)} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+              <Input label="Invoice prefix" value={form.invoicePrefix} onChange={(e) => set('invoicePrefix', e.target.value)} placeholder="INV" />
+              <Input label="Quotation prefix" value={form.estimatePrefix} onChange={(e) => set('estimatePrefix', e.target.value)} placeholder="QTN" />
+              <Input label="Challan prefix" value={form.challanPrefix} onChange={(e) => set('challanPrefix', e.target.value)} placeholder="DC" />
+              <Input label="Credit Note prefix" value={form.creditNotePrefix} onChange={(e) => set('creditNotePrefix', e.target.value)} placeholder="CN" />
             </div>
           </div>
           <div className="col-span-2">

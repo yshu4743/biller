@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Printer, Trash2, FilePlus2, ChevronLeft, ChevronRight, Layers, FileCheck2, Truck, Download } from 'lucide-react';
+import { Printer, Trash2, FilePlus2, ChevronLeft, ChevronRight, Layers, FileCheck2, Truck, Download, ArrowRightLeft } from 'lucide-react';
 import api from '../api/axios.js';
 import { Card, Button, Select, Input, Badge, SearchInput, Spinner, EmptyState, Modal } from '../components/ui.jsx';
 import { formatCurrency, formatDate } from '../utils/format.js';
+
+const typeMeta = {
+  sale: { label: 'Sale', color: 'green' },
+  estimate: { label: 'Quotation', color: 'blue' },
+  challan: { label: 'Challan', color: 'indigo' },
+  sale_return: { label: 'Credit Note', color: 'red' },
+};
 
 const Invoices = () => {
   const navigate = useNavigate();
@@ -51,8 +58,24 @@ const Invoices = () => {
 
   const handlePrint = (id) => navigate(`/invoices/${id}/print`);
 
+  const convertToSale = async (inv) => {
+    const mode = prompt('Payment mode for the sale invoice (cash / upi / card / bank / cheque / credit):', inv.paymentMode || 'cash');
+    if (!mode) return;
+    setBusy(inv._id);
+    try {
+      const res = await api.post(`/invoices/${inv._id}/convert-to-sale`, { paymentMode: mode });
+      load();
+      navigate(`/invoices/${res.data.invoice._id}/print`);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to convert to sale');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleDelete = async (inv) => {
-    if (!confirm(`Delete bill ${inv.billNumber}? Stock will be restored.`)) return;
+    const stockMsg = inv.invoiceType === 'sale_return' ? 'Stock will be adjusted back.' : 'Stock will be restored.';
+    if (!confirm(`Delete ${inv.billNumber}? ${stockMsg}`)) return;
     await api.delete(`/invoices/${inv._id}`);
     load();
   };
@@ -165,6 +188,7 @@ const Invoices = () => {
                   <input type="checkbox" checked={selected.length === invoices.length && invoices.length > 0} onChange={toggleAll} className="h-4 w-4" />
                 </th>
                 <th className="py-3 px-4 font-medium">Bill No</th>
+                <th className="py-3 px-4 font-medium">Type</th>
                 <th className="py-3 px-4 font-medium">Party</th>
                 <th className="py-3 px-4 font-medium">Date</th>
                 <th className="py-3 px-4 font-medium text-right">Items</th>
@@ -182,6 +206,9 @@ const Invoices = () => {
                     <input type="checkbox" checked={selected.includes(inv._id)} onChange={() => toggleSelect(inv._id)} className="h-4 w-4" />
                   </td>
                   <td className="py-3 px-4 font-medium text-indigo-600">{inv.billNumber}</td>
+                  <td className="py-3 px-4">
+                    <Badge color={(typeMeta[inv.invoiceType] || {}).color || 'gray'}>{(typeMeta[inv.invoiceType] || {}).label || inv.invoiceType}</Badge>
+                  </td>
                   <td className="py-3 px-4">{inv.partySnapshot?.name || inv.party?.name || '-'}</td>
                   <td className="py-3 px-4 text-gray-500">{formatDate(inv.date)}</td>
                   <td className="py-3 px-4 text-right">{inv.items.length}</td>
@@ -193,12 +220,21 @@ const Invoices = () => {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex gap-1">
-                      <button title="e-Invoice" disabled={busy === inv._id} onClick={() => genEInvoice(inv)} className="p-1.5 text-gray-400 hover:text-emerald-600 disabled:opacity-40">
-                        {busy === inv._id ? <FileCheck2 size={16} className="animate-pulse" /> : <FileCheck2 size={16} />}
-                      </button>
-                      <button title="E-Way Bill" disabled={busy === inv._id} onClick={() => genEWayBill(inv)} className="p-1.5 text-gray-400 hover:text-amber-600 disabled:opacity-40">
-                        <Truck size={16} />
-                      </button>
+                      {(inv.invoiceType === 'sale' || inv.invoiceType === 'sale_return') && (
+                        <button title="e-Invoice" disabled={busy === inv._id} onClick={() => genEInvoice(inv)} className="p-1.5 text-gray-400 hover:text-emerald-600 disabled:opacity-40">
+                          {busy === inv._id ? <FileCheck2 size={16} className="animate-pulse" /> : <FileCheck2 size={16} />}
+                        </button>
+                      )}
+                      {inv.invoiceType === 'sale' && (
+                        <button title="E-Way Bill" disabled={busy === inv._id} onClick={() => genEWayBill(inv)} className="p-1.5 text-gray-400 hover:text-amber-600 disabled:opacity-40">
+                          <Truck size={16} />
+                        </button>
+                      )}
+                      {(inv.invoiceType === 'estimate' || inv.invoiceType === 'challan') && !inv.convertedTo && (
+                        <button title="Convert to Sale" disabled={busy === inv._id} onClick={() => convertToSale(inv)} className="p-1.5 text-gray-400 hover:text-blue-600 disabled:opacity-40">
+                          <ArrowRightLeft size={16} />
+                        </button>
+                      )}
                       <button onClick={() => handlePrint(inv._id)} className="p-1.5 text-gray-400 hover:text-indigo-600"><Printer size={16} /></button>
                       <button onClick={() => handleDelete(inv)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
                     </div>

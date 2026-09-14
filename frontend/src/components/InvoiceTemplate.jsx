@@ -18,6 +18,7 @@ const InvoiceTemplate = React.forwardRef(({ invoice, company, index = 0 }, ref) 
 
   const labels = { ...defaultLabels, ...(company?.transactionLabels || {}) };
   const heading = labels[invoice.invoiceType] || defaultLabels.sale;
+  const showPayment = invoice.invoiceType === 'sale' || invoice.invoiceType === 'sale_return';
 
   const cols = company?.invoiceColumns || [];
   const has = (c) => cols.includes(c) || (cols.length === 0 && defaultColumns.includes(c));
@@ -223,21 +224,28 @@ const InvoiceTemplate = React.forwardRef(({ invoice, company, index = 0 }, ref) 
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', fontSize: '11px' }}>
           <div style={{ width: '50%' }}>
-            <p><b>Payment Mode:</b> {invoice.paymentMode.toUpperCase()}</p>
-            {invoice.status === 'paid' ? (
-              <p><b>Paid:</b> {formatCurrency(invoice.paidAmount)}</p>
-            ) : (
-              <p><b>Paid:</b> {formatCurrency(invoice.paidAmount)} | <b>Due:</b> {formatCurrency(invoice.dueAmount)}</p>
+            {showPayment && (
+              <>
+                <p><b>Payment Mode:</b> {invoice.paymentMode.toUpperCase()}</p>
+                {invoice.status === 'paid' ? (
+                  <p><b>Paid:</b> {formatCurrency(invoice.paidAmount)}</p>
+                ) : (
+                  <p><b>Paid:</b> {formatCurrency(invoice.paidAmount)} | <b>Due:</b> {formatCurrency(invoice.dueAmount)}</p>
+                )}
+              </>
             )}
             {invoice.notes && <p><b>Notes:</b> {invoice.notes}</p>}
-            {company?.bankName && (
+            {showPayment && company?.bankName && (
               <p style={{ marginTop: '6px' }}>
                 <b>Bank:</b> {company.bankName}
                 {company.bankAccount ? ` | A/C: ${company.bankAccount}` : ''}
                 {company.bankIfsc ? ` | IFSC: ${company.bankIfsc}` : ''}
               </p>
             )}
-            {company?.upiId && <p><b>UPI:</b> {company.upiId}</p>}
+            {showPayment && company?.upiId && <p><b>UPI:</b> {company.upiId}</p>}
+            {!showPayment && (
+              <p style={{ marginTop: '6px', color: '#555' }}>{invoice.invoiceType === 'estimate' ? 'This is a quotation, not a tax invoice.' : 'This is a delivery challan, not a tax invoice.'}</p>
+            )}
           </div>
           <div style={{ textAlign: 'right', width: '30%' }}>
             {invoice.salesPerson && <p><b>Sales Person:</b> {invoice.salesPerson}</p>}

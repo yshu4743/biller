@@ -20,6 +20,9 @@ const companySchema = new mongoose.Schema(
     bankIfsc: { type: String, default: '' },
     upiId: { type: String, default: '' },
     invoicePrefix: { type: String, default: 'INV' },
+    estimatePrefix: { type: String, default: 'QTN' },
+    challanPrefix: { type: String, default: 'DC' },
+    creditNotePrefix: { type: String, default: 'CN' },
     invoiceNote: { type: String, default: 'Thank you for your business!' },
     invoiceFooter: { type: String, default: '' },
     transactionLabels: {

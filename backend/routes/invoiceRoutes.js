@@ -9,6 +9,7 @@ import {
   deleteInvoice,
   updatePaymentStatus,
   partyInvoices,
+  convertToSale,
 } from '../controllers/invoiceController.js';
 import { protect } from '../middleware/auth.js';
 import { generateEInvoice, getEInvoiceJson, generateEWayBill } from '../controllers/complianceController.js';
@@ -18,6 +19,7 @@ const router = express.Router();
 router.route('/').post(protect, createInvoice).get(protect, listInvoices);
 router.post('/batch', protect, createBatchInvoices);
 router.post('/bulk-print', protect, bulkPrint);
+router.post('/:id/convert-to-sale', protect, convertToSale);
 router.get('/party/:partyId', protect, partyInvoices);
 router.get('/print/:id', protect, getInvoiceForPrint);
 router.get('/:id', protect, getInvoice);

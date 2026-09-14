@@ -80,6 +80,7 @@ const invoiceSchema = new mongoose.Schema(
     },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     date: { type: Date, default: Date.now },
+    convertedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice', default: null },
   },
   { timestamps: true }
 );

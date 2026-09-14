@@ -8,6 +8,14 @@ import { formatCurrency, amountToWords } from '../utils/format.js';
 
 const paymentModes = ['cash', 'upi', 'card'];
 
+const invoiceTypes = [
+  { value: 'sale', label: 'Invoice' },
+  { value: 'estimate', label: 'Quotation' },
+  { value: 'challan', label: 'Challan' },
+  { value: 'sale_return', label: 'Credit Note' },
+];
+const typeVerb = { sale: 'Bill', estimate: 'Quotation', challan: 'Challan', sale_return: 'Credit Note' };
+
 const SetupWarnings = ({ company, items, parties }) => {
   const navigate = useNavigate();
   return (
@@ -81,7 +89,7 @@ const Billing = () => {
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState([]);
-  const [billing, setBilling] = useState({ discountType: 'amount', discountValue: 0, paymentMode: 'cash', paidAmount: '', notes: '', salesPerson: '', transport: { transporter: '', vehicleNo: '', lrNo: '', lrDate: '', mode: 'road' } });
+  const [billing, setBilling] = useState({ invoiceType: 'sale', discountType: 'amount', discountValue: 0, paymentMode: 'cash', paidAmount: '', notes: '', salesPerson: '', transport: { transporter: '', vehicleNo: '', lrNo: '', lrDate: '', mode: 'road' } });
   const [saving, setSaving] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [batchPartyIds, setBatchPartyIds] = useState([]);
@@ -224,6 +232,7 @@ const Billing = () => {
     const payload = {
       company: company._id,
       partyId: partyId || undefined,
+      invoiceType: billing.invoiceType,
       items: cart.map((c) => ({
         itemId: c.itemId,
         name: c.name,
@@ -264,6 +273,7 @@ const Billing = () => {
     const payload = {
       company: company._id,
       partyIds: batchPartyIds,
+      invoiceType: billing.invoiceType,
       items: cart.map((c) => ({
         itemId: c.itemId,
         name: c.name,
@@ -299,8 +309,12 @@ const Billing = () => {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-gray-800">New Bill</h2>
-          <p className="text-sm text-gray-500">Create a GST invoice / bill</p>
+          <h2 className="text-xl font-bold text-gray-800">New {typeVerb[billing.invoiceType]}</h2>
+          <p className="text-sm text-gray-500">
+            {billing.invoiceType === 'sale' ? 'Create a GST invoice / bill'
+              : billing.invoiceType === 'sale_return' ? 'Issue a credit note for goods returned'
+              : 'Does not reduce stock — convert to a sale invoice later'}
+          </p>
         </div>
       </div>
 
@@ -478,6 +492,22 @@ const Billing = () => {
           <Card className="p-5 space-y-4 sticky top-20">
             <h3 className="font-semibold text-gray-800">Bill Summary</h3>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                {invoiceTypes.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setBillField('invoiceType', t.value)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${billing.invoiceType === t.value ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <Select label="Discount" value={billing.discountType} onChange={(e) => setBillField('discountType', e.target.value)}>
                 <option value="amount">₹ Amount</option>
@@ -506,37 +536,41 @@ const Billing = () => {
             </div>
 
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => toggleCredit(false)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium border ${!isCredit ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    Pay Now
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleCredit(true)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium border ${isCredit ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    Credit Sale
-                  </button>
-                </div>
-                {!isCredit && (
-                  <Select label="Payment Mode" value={billing.paymentMode} onChange={(e) => setBillField('paymentMode', e.target.value)}>
-                    {paymentModes.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}
-                  </Select>
-                )}
-              </div>
-              <Input
-                type="number"
-                label={isCredit ? 'Amount Received (advance)' : 'Amount Received'}
-                value={billing.paidAmount}
-                onChange={(e) => setBillField('paidAmount', e.target.value)}
-                placeholder={isCredit ? 'Amount paid (leave blank if none)' : 'Full amount'}
-              />
+              {billing.invoiceType === 'sale' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleCredit(false)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium border ${!isCredit ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        Pay Now
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleCredit(true)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium border ${isCredit ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        Credit Sale
+                      </button>
+                    </div>
+                    {!isCredit && (
+                      <Select label="Payment Mode" value={billing.paymentMode} onChange={(e) => setBillField('paymentMode', e.target.value)}>
+                        {paymentModes.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+                      </Select>
+                    )}
+                  </div>
+                  <Input
+                    type="number"
+                    label={isCredit ? 'Amount Received (advance)' : 'Amount Received'}
+                    value={billing.paidAmount}
+                    onChange={(e) => setBillField('paidAmount', e.target.value)}
+                    placeholder={isCredit ? 'Amount paid (leave blank if none)' : 'Full amount'}
+                  />
+                </>
+              )}
               <details className="border border-gray-200 rounded-lg p-3">
                 <summary className="text-sm font-medium text-gray-700 cursor-pointer select-none">
                   Transportation Details
@@ -565,7 +599,7 @@ const Billing = () => {
               className="w-full flex items-center justify-center"
             >
               <Printer size={16} className="mr-2" />
-              {saving ? 'Saving...' : batchMode ? `Save ${batchPartyIds.length} Bill${batchPartyIds.length === 1 ? '' : 's'} & Print All` : 'Save Bill & Print'}
+              {saving ? 'Saving...' : batchMode ? `Save ${batchPartyIds.length} Bill${batchPartyIds.length === 1 ? '' : 's'} & Print All` : `Save ${typeVerb[billing.invoiceType]} & Print`}
             </Button>
           </Card>
         </div>

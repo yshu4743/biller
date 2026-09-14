@@ -118,16 +118,23 @@ async function buildInvoice(userId, body) {
   const roundOff = Math.round(total) - total;
   total = Math.round(total);
 
-  const defaultPaid = paymentMode === 'cash' || paymentMode === 'upi' || paymentMode === 'card' ? total : 0;
-  const effectivePaid = paidAmount > 0 ? Math.min(paidAmount, total) : defaultPaid;
+  const nonInvoice = invoiceType === 'estimate' || invoiceType === 'challan';
+  const defaultPaid = nonInvoice ? 0 : paymentMode === 'cash' || paymentMode === 'upi' || paymentMode === 'card' ? total : 0;
+  const effectivePaid = nonInvoice ? 0 : paidAmount > 0 ? Math.min(paidAmount, total) : defaultPaid;
+
+  const typePrefix =
+    invoiceType === 'estimate' ? (company?.estimatePrefix || 'QTN')
+    : invoiceType === 'challan' ? (company?.challanPrefix || 'DC')
+    : invoiceType === 'sale_return' ? (company?.creditNotePrefix || 'CN')
+    : (company?.invoicePrefix || 'INV');
 
   let invoice;
   for (let attempt = 0; attempt < 20; attempt++) {
-    const billNumber = await generateBillNumber(companyId, company ? company.invoicePrefix : 'INV', company ? company.fyOffset : 0);
+    const billNumber = await generateBillNumber(companyId, typePrefix, company ? company.fyOffset : 0);
     try {
       invoice = await Invoice.create({
         billNumber,
-        prefix: company ? company.invoicePrefix : 'INV',
+        prefix: typePrefix,
         company: companyId,
         party: party ? party._id : undefined,
         partySnapshot: party ? { name: party.name, gstin: party.gstin, phone: party.phone, address: party.address, stateCode: party.stateCode } : undefined,
@@ -147,7 +154,7 @@ async function buildInvoice(userId, body) {
         amountInWords: toWords(total),
         status: effectivePaid >= total ? 'paid' : effectivePaid > 0 ? 'partial' : 'unpaid',
         paidAmount: effectivePaid,
-        dueAmount: total - effectivePaid,
+        dueAmount: nonInvoice ? 0 : total - effectivePaid,
         paymentMode: paymentMode || 'cash',
         dueDate: dueDate || null,
         notes: notes || '',
@@ -178,6 +185,11 @@ async function buildInvoice(userId, body) {
         }
       }
     }
+  } else if (invoice.invoiceType === 'sale_return') {
+    for (const entry of items) {
+      const qtyReturned = Number(entry.quantity) || 0;
+      await Item.findByIdAndUpdate(entry.itemId, { $inc: { stock: qtyReturned } });
+    }
   }
 
   return invoice;
@@ -201,6 +213,50 @@ export const createBatchInvoices = async (req, res) => {
       created.push(await buildInvoice(req.user._id, { ...req.body, partyId }));
     }
     res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const convertToSale = async (req, res) => {
+  try {
+    const source = await Invoice.findById(req.params.id);
+    if (!source) return res.status(404).json({ message: 'Document not found' });
+    if (!['estimate', 'challan'].includes(source.invoiceType)) {
+      return res.status(400).json({ message: 'Only quotations and delivery challans can be converted to a sale' });
+    }
+    if (source.convertedTo) {
+      return res.json({ invoice: source, convertedTo: source.convertedTo, message: 'Already converted to a sale invoice' });
+    }
+
+    const sale = await buildInvoice(req.user._id, {
+      company: source.company,
+      partyId: source.party ? source.party.toString() : undefined,
+      items: (source.items || []).map((it) => ({
+        itemId: it.item,
+        name: it.name,
+        hsn: it.hsn,
+        unit: it.unit,
+        quantity: it.quantity,
+        price: it.price,
+        mrp: it.mrp,
+        gstRate: it.gstRate,
+        gstIncluded: it.gstIncluded,
+        discount: it.discount,
+      })),
+      discountType: source.discountType,
+      discountValue: source.discountValue,
+      paymentMode: req.body.paymentMode || source.paymentMode,
+      paidAmount: req.body.paidAmount,
+      notes: source.notes,
+      salesPerson: source.salesPerson,
+      transport: source.transport,
+      invoiceType: 'sale',
+    });
+
+    source.convertedTo = sale._id;
+    await source.save();
+    res.status(201).json({ invoice: sale, source });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -283,6 +339,12 @@ export const deleteInvoice = async (req, res) => {
               await itemDoc.save();
             }
           }
+        }
+      }
+    } else if (invoice.invoiceType === 'sale_return') {
+      for (const entry of invoice.items) {
+        if (entry.item) {
+          await Item.findByIdAndUpdate(entry.item, { $inc: { stock: -entry.quantity } });
         }
       }
     }
