@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Printer, MessageCircle, Mail } from 'lucide-react';
+import { ArrowLeft, Printer, MessageCircle, Mail, BadgeCheck, Ban } from 'lucide-react';
 import api from '../api/axios.js';
 import InvoiceTemplate from '../components/InvoiceTemplate.jsx';
 import { Spinner, Button } from '../components/ui.jsx';
 
 const InvoicePrint = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [showCredit, setShowCredit] = useState(true);
+  const { id } = useParams();
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.get(`/invoices/print/${id}`).then((res) => setData(res.data)).catch((err) => setError(err.response?.data?.message || 'Invoice not found'));
@@ -57,6 +58,10 @@ const InvoicePrint = () => {
           <ArrowLeft size={16} className="mr-1" /> Back
         </Button>
         <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowCredit((s) => !s)} title="Show or hide credit/due info on the printed bill">
+            {showCredit ? <BadgeCheck size={16} className="mr-1" /> : <Ban size={16} className="mr-1" />}
+            Credit {showCredit ? 'On' : 'Off'}
+          </Button>
           <Button variant="secondary" onClick={handleWhatsApp} title="Send invoice on WhatsApp">
             <MessageCircle size={16} className="mr-1" /> WhatsApp
           </Button>
@@ -70,7 +75,7 @@ const InvoicePrint = () => {
         </div>
       </div>
       <div id="print-area" className="max-w-[800px] mx-auto shadow-lg">
-        <InvoiceTemplate invoice={invoice} company={company} />
+        <InvoiceTemplate invoice={invoice} company={company} showCredit={showCredit} />
       </div>
     </div>
   );

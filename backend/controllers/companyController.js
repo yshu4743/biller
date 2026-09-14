@@ -70,7 +70,7 @@ export const financialYearSummary = async (req, res) => {
     const outstandingByParty = {};
     let totalDues = 0;
     for (const inv of invoices) {
-      const due = (inv.totalAmount || 0) - (inv.paidAmount || 0);
+      const due = Math.max(0, inv.dueAmount || (inv.total || 0) - (inv.paidAmount || 0));
       if (inv.party && due > 0) {
         outstandingByParty[inv.party] = (outstandingByParty[inv.party] || 0) + due;
         totalDues += due;
@@ -100,7 +100,7 @@ export const closeFinancialYear = async (req, res) => {
     const invoices = await Invoice.find({ company: company._id, invoiceType: 'sale' });
     const outstandingByParty = {};
     for (const inv of invoices) {
-      const due = (inv.totalAmount || 0) - (inv.paidAmount || 0);
+      const due = Math.max(0, inv.dueAmount || (inv.total || 0) - (inv.paidAmount || 0));
       if (inv.party && due > 0) outstandingByParty[inv.party] = (outstandingByParty[inv.party] || 0) + due;
     }
 

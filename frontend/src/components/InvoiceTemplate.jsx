@@ -10,7 +10,7 @@ const businessTypeLabels = {
   unregistered: 'Unregistered / consumer business',
 };
 
-const InvoiceTemplate = React.forwardRef(({ invoice, company, index = 0 }, ref) => {
+const InvoiceTemplate = React.forwardRef(({ invoice, company, index = 0, showCredit = true }, ref) => {
   const isGst = company != null && company.isGstRegistered;
   const stateCode = company?.stateCode;
   const partyState = invoice.partySnapshot?.stateCode;
@@ -229,6 +229,11 @@ const InvoiceTemplate = React.forwardRef(({ invoice, company, index = 0 }, ref) 
                 <p><b>Payment Mode:</b> {invoice.paymentMode.toUpperCase()}</p>
                 {invoice.status === 'paid' ? (
                   <p><b>Paid:</b> {formatCurrency(invoice.paidAmount)}</p>
+                ) : invoice.invoiceType === 'sale' && showCredit ? (
+                  <>
+                    <p style={{ color: '#b45309', fontWeight: 'bold' }}>CREDIT SALE</p>
+                    <p><b>Paid:</b> {formatCurrency(invoice.paidAmount)} | <b>Credit Due:</b> {formatCurrency(invoice.dueAmount)}</p>
+                  </>
                 ) : (
                   <p><b>Paid:</b> {formatCurrency(invoice.paidAmount)} | <b>Due:</b> {formatCurrency(invoice.dueAmount)}</p>
                 )}
